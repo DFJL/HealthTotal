@@ -707,7 +707,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       const rawText = data.content.map(b=>b.text||"").join("");
       const m3 = rawText.match(/\{[\s\S]*\}/);
       if (!m3) throw new Error("No JSON in response");
-      const parsed = extractJSON(txt3);
+      const parsed = extractJSON(rawText);
       setDayInsight(prev=>({...prev,[dateKey]:parsed}));
     } catch(e) {
       setDayInsight(prev=>({...prev,[dateKey]:{status:"amarillo",titulo:"Error al analizar",resumen:"No se pudo generar el análisis. Intenta de nuevo.",tip:""}}));
@@ -1289,7 +1289,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       {e.score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{e.score}/10</span>}
                     </div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:14,marginBottom:6}}>{e.name}</div>
-                    {e.image && <img src={e.image} alt="" style={{width:"100%",height:120,objectFit:"cover",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
+                    {e.image && <img src={e.image} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",marginBottom:4}}>
                       <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span> · <span style={{color:"#a8ff3e"}}>{e.carbs}g C</span> · <span style={{color:"#ff7a4d"}}>{e.fats}g F</span>
                     </div>
