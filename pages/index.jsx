@@ -2262,65 +2262,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
           return (
           <div>
-            {/* ── Status Banner ── */}
-            {avg7 && (
-              <div className="card fade-in" style={{marginBottom:20,borderLeft:`3px solid ${abPct>=70?"#3ddc84":abPct>=50?"#ffb830":"#ff4d4d"}`,borderRadius:"0 4px 4px 0",background:abPct>=70?"rgba(61,220,132,.04)":abPct>=50?"rgba(255,184,48,.04)":"rgba(255,77,77,.04)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:10}}>
-                  <div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:abPct>=70?"#3ddc84":abPct>=50?"#ffb830":"#ff4d4d",letterSpacing:".15em",marginBottom:4}}>
-                      {abPct>=70?"✅ SEMANA EN PROTOCOLO":abPct>=50?"⚠ SEMANA PARCIAL":"🔴 SEMANA FUERA DE PROTOCOLO"}
-                    </div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16}}>
-                      Promedio últimos 7 días con data ({loggedDays7.length} días registrados)
-                    </div>
-                  </div>
-                  {abPct!==null && (
-                    <div style={{textAlign:"center",background:"#1a1a22",borderRadius:3,padding:"8px 16px"}}>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,color:abPct>=70?"#3ddc84":abPct>=50?"#ffb830":"#ff4d4d",lineHeight:1}}>{abPct}%</div>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>comidas A+B</div>
-                    </div>
-                  )}
-                </div>
-                <div className="g4">
-                  {MACRO_KEYS.map(k=>{
-                    const real=avg7[k]; const meta=targets[k];
-                    const pct=Math.round(real/meta*100);
-                    const c=pct>=90&&pct<=115?"#3ddc84":pct>=75?"#ffb830":"#ff4d4d";
-                    const delta=real-meta;
-                    return (
-                      <div key={k} style={{background:"#131318",borderRadius:3,padding:"10px 8px",textAlign:"center"}}>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:3,letterSpacing:".08em"}}>{MACRO_CFG[k].label.toUpperCase()}</div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{real}<span style={{fontSize:11,color:"#44445a"}}>{MACRO_CFG[k].unit}</span></div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:c,marginTop:3}}>
-                          {pct}% meta · {delta>0?"+":""}{delta}{MACRO_CFG[k].unit}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* Adaptive suggestion */}
-                {avg7.calories < targets.calories*0.85 && (
-                  <div className="ins iy" style={{marginTop:10}}>
-                    💡 Promedio calórico <strong>{avg7.calories} kcal</strong> — estás {targets.calories-avg7.calories} kcal por debajo de la meta. Puede frenar la recomposición muscular. Agrega una fuente de proteína + carbohidrato en el snack de mañana.
-                  </div>
-                )}
-                {avg7.protein < targets.protein*0.8 && (
-                  <div className="ins ir" style={{marginTop:10}}>
-                    ⚠ Proteína promedio <strong>{avg7.protein}g</strong> — {targets.protein-avg7.protein}g por debajo de meta. La síntesis muscular se compromete. Prioriza batido proteico o pollo/atún en cada comida principal.
-                  </div>
-                )}
-                {dfPct>25 && (
-                  <div className="ins ir" style={{marginTop:10}}>
-                    ⚠ <strong>{dfPct}%</strong> de las comidas esta semana fueron D/F. Esto impacta directamente tu LDL y glucemia. Revisa el Hall of Shame en SEMANA para identificar los patrones.
-                  </div>
-                )}
-                {abPct>=70 && muscleGain>0 && (
-                  <div className="ins ig" style={{marginTop:10}}>
-                    ✅ Semana sólida + músculo en tendencia positiva (+{muscleGain}kg vs medición anterior). Mantén el protocolo.
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* ── Macro targets ── */}
             <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
@@ -2372,34 +2313,6 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               )}
             </div>
-
-            {/* ── Top foods from your history ── */}
-            {topFoods.length>0 && (
-              <div>
-                <div className="sec-h">Tus Mejores Alimentos — Basado en tu Historial</div>
-                <div style={{marginBottom:20}}>
-                  {topFoods.map((f,i)=>(
-                    <div key={f.name} className="card fade-in" style={{marginBottom:8,display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderLeft:`3px solid ${f.avgScore>=4.5?"#3ddc84":f.avgScore>=3.5?"#a8ff3e":"#ffb830"}`,borderRadius:"0 4px 4px 0"}}>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:24,color:"#2a2a38",background:f.avgScore>=4.5?"#3ddc84":f.avgScore>=3.5?"#a8ff3e":"#ffb830",borderRadius:2,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        {i+1}
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:3}}>{f.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>
-                          {f.meal&&<span style={{color:"#a8ff3e",marginRight:8}}>{f.meal}</span>}
-                          {f.calories>0&&<span style={{color:"#ffb830",marginRight:8}}>{f.calories}kcal</span>}
-                          {f.protein>0&&<span style={{color:"#4dc8ff"}}>{f.protein}g P</span>}
-                        </div>
-                      </div>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",textAlign:"right"}}>
-                        {f.count}x registrado<br/>
-                        <span style={{color:f.avgScore>=4?"#3ddc84":"#ffb830"}}>{f.grades.filter(g=>g==="A"||g==="B").length}/{f.grades.length} A/B</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* ── Template meals from PLAN_MEALS (reference) ── */}
             <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
