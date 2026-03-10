@@ -1040,6 +1040,38 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             </div>
 
+                        {/* ── Today progress ── */}
+            <div className="sec-h">Hoy — Progreso de Comidas</div>
+            <div className="card" style={{marginBottom:20}}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                {MEAL_ORDER.map(m=>{
+                  const done = todayMeals.has(m);
+                  const entries = (log[todayStr()]||[]).filter(e=>e.meal===m);
+                  const mKcal = entries.reduce((s,e)=>s+(e.calories||0),0);
+                  return (
+                    <div key={m} onClick={()=>{setTab("hoy");}} style={{
+                      flex:"1 1 100px",background:done?"rgba(168,255,62,.08)":"#131318",
+                      border:`1px solid ${done?"rgba(168,255,62,.3)":"#2a2a38"}`,
+                      borderRadius:3,padding:"8px 10px",cursor:"pointer",transition:"all .2s"
+                    }}>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:done?"#a8ff3e":"#44445a",letterSpacing:".08em",marginBottom:3}}>{done?"✓ LISTO":"PENDIENTE"}</div>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:12}}>{m}</div>
+                      {done && mKcal>0 && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ffb830",marginTop:2}}>{mKcal} kcal</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              {remainingMeals.length>0 ? (
+                <div style={{fontSize:12,color:"#8888a8"}}>
+                  📋 Pendientes hoy: <strong style={{color:"#e8e8f0"}}>{remainingMeals.join(" · ")}</strong>
+                </div>
+              ) : (
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#3ddc84",textAlign:"center",padding:"6px 0",letterSpacing:".1em"}}>
+                  ✅ TODAS LAS COMIDAS REGISTRADAS HOY
+                </div>
+              )}
+            </div>
+
             {/* Day insight card — shown first when there are entries */}
             {dayLog.length > 0 && (() => {
               const ins = dayInsight[selDate];
@@ -2282,37 +2314,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               ))}
             </div>
 
-            {/* ── Today progress ── */}
-            <div className="sec-h">Hoy — Progreso de Comidas</div>
-            <div className="card" style={{marginBottom:20}}>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                {MEAL_ORDER.map(m=>{
-                  const done = todayMeals.has(m);
-                  const entries = (log[todayStr()]||[]).filter(e=>e.meal===m);
-                  const mKcal = entries.reduce((s,e)=>s+(e.calories||0),0);
-                  return (
-                    <div key={m} onClick={()=>{setTab("hoy");}} style={{
-                      flex:"1 1 100px",background:done?"rgba(168,255,62,.08)":"#131318",
-                      border:`1px solid ${done?"rgba(168,255,62,.3)":"#2a2a38"}`,
-                      borderRadius:3,padding:"8px 10px",cursor:"pointer",transition:"all .2s"
-                    }}>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:done?"#a8ff3e":"#44445a",letterSpacing:".08em",marginBottom:3}}>{done?"✓ LISTO":"PENDIENTE"}</div>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:12}}>{m}</div>
-                      {done && mKcal>0 && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ffb830",marginTop:2}}>{mKcal} kcal</div>}
-                    </div>
-                  );
-                })}
-              </div>
-              {remainingMeals.length>0 ? (
-                <div style={{fontSize:12,color:"#8888a8"}}>
-                  📋 Pendientes hoy: <strong style={{color:"#e8e8f0"}}>{remainingMeals.join(" · ")}</strong>
-                </div>
-              ) : (
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#3ddc84",textAlign:"center",padding:"6px 0",letterSpacing:".1em"}}>
-                  ✅ TODAS LAS COMIDAS REGISTRADAS HOY
-                </div>
-              )}
-            </div>
+
 
             {/* ── Template meals from PLAN_MEALS (reference) ── */}
             <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
