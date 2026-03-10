@@ -812,7 +812,7 @@ Analiza este día y responde SOLO JSON sin backticks:
 
   const latestLab = LABS_HIST[LABS_HIST.length-1];
   const MODULES = [
-    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","HOY"],["semana","PROGRESO NUTRICIONAL"],["plan","PLAN"],["guia","GUÍA"],["analisis","ANÁLISIS"]]},
+    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO NUTRICIONAL"],["plan","PLAN"],["guia","GUÍA"],["analisis","ANÁLISIS"]]},
     {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"],["habitos","HÁBITOS"]]},
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
