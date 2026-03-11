@@ -2533,22 +2533,38 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             )}
 
-            <div className="sec-h">Estado Actual — Feb 2026</div>
+            <div className="sec-h">Estado Actual{lastInbody ? ` — ${lastInbody.d}` : ""}</div>
+            {!lastInbody ? (
+              <div style={{textAlign:"center",padding:"32px 0",color:"#44445a"}}>
+                <div style={{fontSize:36,marginBottom:12}}>⚖️</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,marginBottom:6}}>Sin mediciones InBody</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>Sube tu primera foto de InBody<br/>usando el botón de arriba.</div>
+              </div>
+            ) : (
             <div className="g4" style={{marginBottom:20}}>
-              {[
-                {l:"Peso",v:"82.8",u:"kg",d:"Peak 83.7 kg (Nov 2025)",sub:"Objetivo: 80 kg",c:"#a8ff3e"},
-                {l:"Masa Muscular",v:"38.5",u:"kg",d:"+6.3 kg vs 2019",sub:"Objetivo: ≥39 kg",c:"#3ddc84"},
-                {l:"% Grasa",v:"19.0",u:"%",d:"Mejor: 14.0% (Ene 2020)",sub:"Objetivo: 15–16%",c:"#ffb830"},
-                {l:"Grasa Visceral",v:"6",u:"lvl",d:"Rango saludable (<10)",sub:"TMB: 1,817 kcal/día",c:"#4dc8ff"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
-                  <div className="lbl">{x.l}</div>
-                  <div className="bnum" style={{color:x.c}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginTop:5}}>{x.d}</div>
-                  <div style={{fontSize:11,color:"#8888a8",marginTop:3}}>{x.sub}</div>
-                </div>
-              ))}
+              {(()=>{
+                const peakW = allInbody.reduce((mx,x)=>x.w>mx?x.w:mx, 0);
+                const peakWDate = allInbody.find(x=>x.w===peakW)?.d||"";
+                const firstM = allInbody[0]?.m;
+                const bestF = allInbody.reduce((mn,x)=>x.f<mn?x.f:mn, 100);
+                const bestFDate = allInbody.find(x=>x.f===bestF)?.d||"";
+                const tmb = lastInbody ? Math.round(10*lastInbody.w + 6.25*175 - 5*39 + 5) : 0;
+                return [
+                  {l:"Peso",v:lastInbody.w,u:"kg",d:peakW>lastInbody.w?`Peak ${peakW} kg (${peakWDate})`:"Peso mínimo actual",sub:`Objetivo: ${targets.weightGoal||80} kg`,c:"#a8ff3e"},
+                  {l:"Masa Muscular",v:lastInbody.m,u:"kg",d:firstM?`+${(lastInbody.m-firstM).toFixed(1)} kg vs ${allInbody[0].d}`:"Primera medición",sub:`Objetivo: ≥${targets.muscleGoal||39} kg`,c:"#3ddc84"},
+                  {l:"% Grasa",v:lastInbody.f,u:"%",d:`Mejor: ${bestF}% (${bestFDate})`,sub:`Objetivo: ${targets.fatGoal||"15–16"}%`,c:"#ffb830"},
+                  {l:"Grasa Visceral",v:lastInbody.vi||"—",u:"lvl",d:lastInbody.vi<10?"Rango saludable (<10)":lastInbody.vi<15?"Riesgo moderado":"Riesgo alto",sub:`TMB: ${tmb.toLocaleString()} kcal/día`,c:"#4dc8ff"},
+                ].map(x=>(
+                  <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
+                    <div className="lbl">{x.l}</div>
+                    <div className="bnum" style={{color:x.c}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginTop:5}}>{x.d}</div>
+                    <div style={{fontSize:11,color:"#8888a8",marginTop:3}}>{x.sub}</div>
+                  </div>
+                ));
+              })()}
             </div>
+            )}
 
             <div className="sec-h">Progresión — 2018 a 2026 ({allInbody.length} mediciones)</div>
             <div className="card" style={{padding:"16px 10px",marginBottom:20}}>
@@ -2766,934 +2782,70 @@ Analiza este día y responde SOLO JSON sin backticks:
               </table>
             </div>
 
-            {/* Hemograma */}
-            <div className="sec-h">Hemograma Completo — Serie Roja ⚠ Microcitosis</div>
-            <div className="g2" style={{marginBottom:20}}>
-              <div className="card" style={{borderTop:"2px solid #4dc8ff"}}>
-                <div className="lbl" style={{marginBottom:12}}>Serie Blanca (leucocitos)</div>
-                <table className="tbl">
-                  <thead><tr><th>Parámetro</th><th>Ago 2025</th><th>Nov 2025</th><th>Ref</th><th>Estado</th></tr></thead>
-                  <tbody>
-                    {[
-                      ["Glóbulos Blancos","4.82","6.62","4.8–10.8","#3ddc84","Normal"],
-                      ["Linfocitos %","44.8","45.2","<43.1%","#ffb830","↑ Leve"],
-                      ["Neutrófilos %","45.6","44.4","44.3–70%","#3ddc84","Normal"],
-                      ["Monocitos %","7.7","7.9","2–9.8%","#3ddc84","Normal"],
-                      ["Eosinófilos %","0.08 ↓","1.8","0.5–5%","#3ddc84","Normalizado"],
-                      ["Basófilos %","0.21","0.22","0–2%","#3ddc84","Normal"],
-                    ].map(([p,a1,a2,ref,c,status])=>(
-                      <tr key={p}><td>{p}</td><td className="mono">{a1}</td><td className="mono" style={{color:c}}>{a2}</td><td style={{fontSize:10,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{ref}</td><td><span style={{background:c==="#3ddc84"?"rgba(61,220,132,.1)":"rgba(255,184,48,.1)",color:c,borderRadius:2,padding:"1px 6px",fontSize:9,fontFamily:"JetBrains Mono,monospace"}}>{status}</span></td></tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Hemograma — only if user has lab data with hemograma fields */}
+            {labResults.some(l=>l.leucocitos!=null||l.vcm!=null) && (()=>{
+              const hLabs = labResults.filter(l=>l.leucocitos!=null||l.vcm!=null);
+              const h1 = hLabs[0]; const h2 = hLabs[1]||null;
+              const col1 = h1?.date||""; const col2 = h2?.date||"";
+              const fmt = v=>v!=null?v:"—";
+              const cmp = (v1,v2,low,high,inverse=false)=>{
+                if(v2==null) return "#8888a8";
+                const ok = v2>=low && v2<=high;
+                return ok?"#3ddc84":inverse?"#ffb830":"#ff4d4d";
+              };
+              return (<>
+              <div className="sec-h">Hemograma Completo</div>
+              <div className="g2" style={{marginBottom:20}}>
+                <div className="card" style={{borderTop:"2px solid #4dc8ff"}}>
+                  <div className="lbl" style={{marginBottom:12}}>Serie Blanca (Leucocitos)</div>
+                  <table className="tbl">
+                    <thead><tr><th>Parámetro</th><th>{col1}</th>{h2&&<th>{col2}</th>}<th>Ref</th></tr></thead>
+                    <tbody>
+                      {[
+                        ["Glóbulos Blancos","leucocitos",4.8,10.8],
+                        ["Linfocitos %","linfocitos",20,40],
+                      ].map(([p,k,lo,hi])=>{
+                        const v1=fmt(h1?.[k]); const v2=h2?fmt(h2[k]):null;
+                        const c2=cmp(null,h2?.[k],lo,hi);
+                        return (<tr key={p}>
+                          <td>{p}</td>
+                          <td className="mono">{v1}</td>
+                          {h2&&<td className="mono" style={{color:c2}}>{v2}</td>}
+                          <td style={{fontSize:10,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{lo}–{hi}</td>
+                        </tr>);
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
+                  <div className="lbl" style={{marginBottom:12}}>Serie Roja</div>
+                  <table className="tbl">
+                    <thead><tr><th>Parámetro</th><th>{col1}</th>{h2&&<th>{col2}</th>}<th>Ref</th></tr></thead>
+                    <tbody>
+                      {[
+                        ["Hemoglobina","hb",13.5,17.9],
+                        ["VCM","vcm",80,98.2],
+                        ["HCM","hcm",26,34],
+                      ].map(([p,k,lo,hi])=>{
+                        const v1=fmt(h1?.[k]); const v2=h2?fmt(h2[k]):null;
+                        const c1=cmp(null,h1?.[k],lo,hi); const c2=cmp(null,h2?.[k],lo,hi);
+                        return (<tr key={p}>
+                          <td>{p}</td>
+                          <td className="mono" style={{color:c1}}>{v1}</td>
+                          {h2&&<td className="mono" style={{color:c2}}>{v2}</td>}
+                          <td style={{fontSize:10,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{lo}–{hi}</td>
+                        </tr>);
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
-                <div className="lbl" style={{marginBottom:12}}>Serie Roja — Microcitosis persistente ⚠</div>
-                <table className="tbl">
-                  <thead><tr><th>Parámetro</th><th>Ago 2025</th><th>Nov 2025</th><th>Ref</th><th>Estado</th></tr></thead>
-                  <tbody>
-                    {[
-                      ["Glóbulos Rojos","5.63","5.96 ↑","4.5–5.9","#ffb830","Lím. Alto"],
-                      ["Hemoglobina","13.8 ↓","15.1","13.5–17.9","#3ddc84","Mejoró"],
-                      ["Hematocrito","40.8 ↓","45.1","41–53.7%","#3ddc84","Mejoró"],
-                      ["VCM ⚠","72.5 ↓↓","75.7 ↓↓","80–98.2 fL","#ff4d4d","Bajo ⚠"],
-                      ["HCM ⚠","24.5 ↓↓","25.3 ↓","26–34 pg","#ff4d4d","Bajo ⚠"],
-                      ["Plaquetas","248","235","150–450","#3ddc84","Normal"],
-                    ].map(([p,a1,a2,ref,c,status])=>(
-                      <tr key={p}><td>{p}</td><td className="mono" style={{color:c==="#ff4d4d"?c:"inherit"}}>{a1}</td><td className="mono" style={{color:c}}>{a2}</td><td style={{fontSize:10,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{ref}</td><td><span style={{background:c==="#3ddc84"?"rgba(61,220,132,.1)":c==="#ffb830"?"rgba(255,184,48,.1)":"rgba(255,77,77,.1)",color:c,borderRadius:2,padding:"1px 6px",fontSize:9,fontFamily:"JetBrains Mono,monospace"}}>{status}</span></td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              </>);
+            })()}
 
-            {/* Other markers */}
-            <div className="sec-h">Otros Parámetros</div>
-            <div className="g4" style={{marginBottom:20}}>
-              {[
-                {l:"PSA Prostático · Nov 2025",v:"1.1",u:"ng/mL",ref:"Normal (0–3)",c:"#3ddc84"},
-                {l:"Nitrógeno Ureico · Ago 2025",v:"17.8",u:"mg/dL",ref:"Función renal · Ref: 6–24",c:"#3ddc84"},
-                {l:"Creatinina · Ago 2025",v:"1.08",u:"mg/dL",ref:"Función renal · Ref: 0.6–1.3",c:"#3ddc84"},
-                {l:"GGT (hígado) · Ago 2025",v:"28",u:"U/L",ref:"Función hepática · Ref: 5–55",c:"#3ddc84"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
-                  <div className="lbl">{x.l}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:36,color:x.c,lineHeight:1}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
-                  <div style={{marginTop:8}}><span style={{background:"rgba(61,220,132,.1)",color:"#3ddc84",borderRadius:2,padding:"2px 8px",fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>NORMAL ✓</span></div>
-                  <div style={{fontSize:11,color:"#8888a8",marginTop:6}}>{x.ref}</div>
-                </div>
-              ))}
-            </div>
-            <div className="g2" style={{marginBottom:20}}>
-              {[
-                {l:"Ácido Úrico · Ago 2025",v:"5.71",u:"mg/dL",ref:"Sin riesgo de gota · Ref: 4–7",c:"#3ddc84"},
-                {l:"Ácido Úrico (calculado)",v:"—",u:"",ref:"Siguiente panel: solicitar con hemograma",c:"#44445a"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
-                  <div className="lbl">{x.l}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:36,color:x.c,lineHeight:1}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
-                  <div style={{fontSize:11,color:"#8888a8",marginTop:8}}>{x.ref}</div>
-                </div>
-              ))}
-            </div>
+            </>)}
 
           </div>
         )}
 
         {/* ══ ENTRENA ══ */}
-        {tab==="entrena" && (
-          <div>
-            {/* AI Routine Generator */}
-            <div className="sec-h">Generador de Rutina con IA</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Genera rutinas con IA basadas en tu perfil real. Guarda tu historial.</p>
-            <div className="card" style={{marginBottom:20}}>
-              <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
-                Describe lo que necesitas y la IA generará una rutina personalizada basada en tu equipo y objetivos actuales.
-              </p>
-              <textarea value={routineInput} onChange={e=>setRoutineInput(e.target.value)}
-                placeholder="Ej: Quiero una rutina de 4 días enfocada en mejorar las piernas y reducir grasa visceral. Tengo 45 min por sesión. Incluye más trabajo de cardio en intervalos."
-                rows={4} className="inp" style={{resize:"vertical",marginBottom:10}}/>
-              <div style={{display:"flex",gap:8,marginBottom:generatedRoutine?14:0}}>
-                <button className="btn" style={{flex:1}} onClick={generateRoutine} disabled={routineLoading||!routineInput.trim()}>
-                  {routineLoading?<span>GENERANDO <span className="dots"><span/><span/><span/></span></span>:"⚡ GENERAR RUTINA CON IA"}
-                </button>
-                {routineTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",alignSelf:"center",whiteSpace:"nowrap"}}>{fmtCacheAge(routineTs)}</span>}
-              </div>
-              {generatedRoutine?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{generatedRoutine.error}</div>}
-              {generatedRoutine && !generatedRoutine.error && (
-                <div className="fade-in">
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,marginBottom:4}}>{generatedRoutine.title}</div>
-                    {generatedRoutine.description && <p style={{fontSize:12,color:"#8888a8",lineHeight:1.5}}>{generatedRoutine.description}</p>}
-                  </div>
-                  {generatedRoutine.days?.map((day,i)=>(
-                    <div key={i} className="card" style={{marginBottom:10,borderTop:`2px solid ${day.type?.includes("DESCANSO")||day.type?.includes("REST")?"#2a2a38":"#a8ff3e"}`,opacity:day.type?.includes("DESCANSO")||day.type?.includes("REST")?0.5:1}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18}}>{day.day}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".15em",textTransform:"uppercase"}}>{day.type}</div>
-                      </div>
-                      {day.exercises?.map((ex,j)=>(
-                        <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"6px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontFamily:"'Instrument Sans',sans-serif",fontWeight:500}}>{ex.name}</div>
-                            {ex.notes && <div style={{fontSize:11,color:"#3ddc84",marginTop:2}}>💡 {ex.notes}</div>}
-                          </div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#a8ff3e",flexShrink:0,marginLeft:10}}>{ex.sets}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                  {generatedRoutine.notes && (
-                    <div className="ins ib">
-                      <strong>📝 Notas importantes</strong>
-                      {generatedRoutine.notes}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ── Rutinas Guardadas ── */}
-            {savedRoutines.length>0 && (
-              <div style={{marginBottom:20}}>
-                <div className="sec-h">Rutinas Guardadas</div>
-                <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Últimas rutinas generadas. Toca para volver a cargar.</p>
-                {savedRoutines.map((r,i)=>(
-                  <div key={r.savedAt||i} className="card" style={{marginBottom:8,cursor:"pointer",borderLeft:"3px solid #2a2a38",borderRadius:"0 4px 4px 0",padding:"12px 14px"}}
-                    onClick={()=>{setGeneratedRoutine(r); setRoutineInput(r.request||"");}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                      <div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,marginBottom:3}}>{r.title}</div>
-                        {r.request && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",lineHeight:1.4}}>"{r.request.slice(0,80)}{r.request.length>80?"...":""}"</div>}
-                      </div>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",flexShrink:0,textAlign:"right"}}>
-                        {r.savedAt ? fmtCacheAge(r.savedAt) : ""}
-                        <button onClick={e=>{e.stopPropagation();const ns=savedRoutines.filter((_,j)=>j!==i);setSavedRoutines(ns);if(user)setAiCache(user.id,"saved_routines",ns).catch(()=>{});}}
-                          style={{display:"block",background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:12,marginTop:4}}>🗑</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── Perfil de Entrenamiento ── */}
-            <div className="sec-h">Perfil & Configuración</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Tu equipo, suplementos y objetivos alimentan el generador de rutinas. Edítalos en CONFIG.</p>
-            <div className="g2" style={{marginBottom:20}}>
-              <div className="card" style={{borderTop:"2px solid #a8ff3e"}}>
-                <div className="lbl" style={{marginBottom:12}}>🏋️ Equipo Disponible</div>
-                {userProfile.equipment.map((e,i)=>(
-                  <div key={i} style={{padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.4)",fontSize:12,color:"#8888a8"}}>
-                    <span style={{color:"#a8ff3e",marginRight:8}}>›</span>{e}
-                  </div>
-                ))}
-              </div>
-              <div className="card" style={{borderTop:"2px solid #4dc8ff"}}>
-                <div className="lbl" style={{marginBottom:12}}>💊 Suplementos Actuales</div>
-                {userProfile.supplements.map((s,i)=>(
-                  <div key={i} style={{padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.4)",fontSize:12,color:"#8888a8"}}>
-                    <span style={{color:"#4dc8ff",marginRight:8}}>›</span>{s}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="card" style={{marginBottom:20,borderTop:"2px solid #ffb830"}}>
-              <div className="lbl" style={{marginBottom:8}}>🎯 Objetivos & Contexto Clínico</div>
-              <div style={{fontSize:12,color:"#8888a8",lineHeight:1.6}}>{userProfile.goals}</div>
-              <div style={{fontSize:11,color:"#44445a",marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>{userProfile.health_notes}</div>
-              <div style={{display:"flex",gap:16,marginTop:10}}>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>Duración: <strong style={{color:"#ffb830"}}>{userProfile.session_duration}</strong></div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>Días/semana: <strong style={{color:"#ffb830"}}>{userProfile.training_days}</strong></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══ GUÍA ══ */}
-        {tab==="guia" && (()=>{
-          // ── 7-day stats ──
-          const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
-          const loggedDays7 = days7.filter(d=>(log[d]||[]).length>0);
-          const allEntries7 = days7.flatMap(d=>log[d]||[]);
-          const avg7 = loggedDays7.length>0 ? {
-            calories: Math.round(allEntries7.reduce((s,e)=>s+(e.calories||0),0)/loggedDays7.length),
-            protein:  Math.round(allEntries7.reduce((s,e)=>s+(e.protein||0),0)/loggedDays7.length),
-            carbs:    Math.round(allEntries7.reduce((s,e)=>s+(e.carbs||0),0)/loggedDays7.length),
-            fats:     Math.round(allEntries7.reduce((s,e)=>s+(e.fats||0),0)/loggedDays7.length),
-          } : null;
-          const gradeCount7 = {A:0,B:0,C:0,D:0,F:0};
-          allEntries7.forEach(e=>{ if(e.grade && gradeCount7[e.grade]!==undefined) gradeCount7[e.grade]++; });
-          const totalGraded7 = Object.values(gradeCount7).reduce((s,v)=>s+v,0);
-          const abPct7 = totalGraded7>0 ? Math.round((gradeCount7.A+gradeCount7.B)/totalGraded7*100) : null;
-          const dfPct7 = totalGraded7>0 ? Math.round((gradeCount7.D+gradeCount7.F)/totalGraded7*100) : null;
-
-          // ── 14-day trend insights ──
-          const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
-          const entries14 = days14.flatMap(d=>log[d]||[]);
-          const loggedDays14 = days14.filter(d=>(log[d]||[]).length>0).length;
-          const avgProtein14 = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.protein||0),0)/loggedDays14) : 0;
-          const avgKcal14   = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.calories||0),0)/loggedDays14) : 0;
-          const abCount14   = entries14.filter(e=>e.grade==="A"||e.grade==="B").length;
-          const abPct14     = entries14.length>0 ? Math.round(abCount14/entries14.length*100) : 0;
-          const prevInbody  = allInbody.length>1 ? allInbody[allInbody.length-2] : null;
-          const muscleGain  = lastInbody && prevInbody ? (lastInbody.m - prevInbody.m).toFixed(1) : null;
-
-          // ── Dynamic insights ──
-          const insights = [];
-          if(avgProtein14>0 && avgProtein14<targets.protein*0.85)
-            insights.push({type:"warn",icon:"💪",title:"Proteína insuficiente",text:`Promedio ${avgProtein14}g/día vs meta ${targets.protein}g. Cada déficit proteico = menos recuperación muscular. Agrega fuente en snack mañana y post-entreno.`});
-          if(avgKcal14>0 && avgKcal14>targets.calories*1.12)
-            insights.push({type:"warn",icon:"⚡",title:"Exceso calórico sostenido",text:`Promedio ${avgKcal14} kcal vs meta ${targets.calories}. ${avgKcal14-targets.calories} kcal extra/día pueden revertir el déficit de grasa. Revisa las cenas.`});
-          if(abPct14>0 && abPct14<50)
-            insights.push({type:"bad",icon:"📊",title:"Calidad nutricional baja",text:`Solo ${abPct14}% de comidas en A/B estos 14 días. Impacta directamente LDL, HbA1c y recomposición. Foco en proteína magra + vegetales en cada comida principal.`});
-          if(abPct14>=70)
-            insights.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de tu recomposición. Mantén el patrón.`});
-          if(muscleGain>0)
-            insights.push({type:"good",icon:"💪",title:`Masa muscular +${muscleGain}kg`,text:`Tu protocolo nutricional está funcionando. Sigue priorizando proteína post-entreno y mantén el superávit calórico moderado en días de entreno.`});
-
-          return (
-          <div>
-            {/* ── Macro targets ── */}
-            <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Plan de referencia, metas de macros por tipo de día y suplementación.</p>
-            <div className="g4" style={{marginBottom:20}}>
-              {MACRO_KEYS.map(k=>(
-                <div key={k} className="card" style={{borderTop:`2px solid ${MACRO_CFG[k].color}`}}>
-                  <div className="lbl">Meta {MACRO_CFG[k].label}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:34,color:MACRO_CFG[k].color,lineHeight:1}}>
-                    {isTrainingDay?targets[k]:k==="calories"?Math.round(targets[k]*0.89):k==="carbs"?Math.round(targets[k]*0.75):targets[k]}
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#8888a8",marginLeft:2}}>{MACRO_CFG[k].unit}</span>
-                  </div>
-                  {avg7 && (
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
-                      Promedio real: {avg7[k]}{MACRO_CFG[k].unit}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* ── Plan de Referencia — solo si hay datos AI o log ── */}
-            {Object.keys(log).length > 0 && (<>
-            <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
-            <p style={{fontSize:12,color:"#44445a",marginBottom:14,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".06em"}}>
-              PLANTILLA BASE · USA LA IA EN HÁBITOS PARA UN PLAN PERSONALIZADO
-            </p>
-            {PLAN_MEALS.map(m=>(
-              <div key={m.name} className="card" style={{marginBottom:12,borderLeft:`3px solid ${m.highlight?"#a8ff3e":"#2a2a38"}`,borderRadius:"0 4px 4px 0"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18}}>{m.name}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>{m.time}</div>
-                  </div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",textAlign:"right"}}>
-                    <span style={{color:"#ffb830"}}>{m.kcal} kcal</span> · P:{m.p}g · C:{m.c}g · G:{m.f}g
-                  </div>
-                </div>
-                {m.items.map(it=>(
-                  <div key={it.n} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)",gap:10}}>
-                    <div style={{fontSize:13,fontWeight:500}}>{it.n}</div>
-                    <div style={{fontSize:11,color:"#3ddc84",textAlign:"right",flex:"0 0 50%",fontStyle:"italic"}}>✦ {it.why}</div>
-                  </div>
-                ))}
-              </div>
-            ))}
-
-            {/* ── Suplementos ── */}
-            <div className="sec-h">Suplementos — Timing Óptimo</div>
-            <div className="g2" style={{marginBottom:20}}>
-              <div className="card" style={{borderTop:"2px solid #ffb830"}}>
-                <div className="lbl" style={{marginBottom:12}}>🌅 Mañana — con desayuno</div>
-                <div style={{fontSize:12,color:"#8888a8",lineHeight:2.1}}>
-                  ☀ <strong style={{color:"#e8e8f0"}}>Vitamina D3</strong> 2000–5000 UI · Con grasa<br/>
-                  ☀ <strong style={{color:"#e8e8f0"}}>Vitamina C</strong> 500–1000mg · Antioxidante LDL<br/>
-                  ☀ <strong style={{color:"#e8e8f0"}}>Zinc</strong> 15–25mg · No con calcio o hierro<br/>
-                  ☀ <strong style={{color:"#e8e8f0"}}>Omega-3</strong> 2–4g EPA+DHA · Saltar con salmón
-                </div>
-              </div>
-              <div className="card" style={{borderTop:"2px solid #4dc8ff"}}>
-                <div className="lbl" style={{marginBottom:12}}>⚡ Post-Entreno · 🌙 Noche</div>
-                <div style={{fontSize:12,color:"#8888a8",lineHeight:2.1}}>
-                  ⚡ <strong style={{color:"#e8e8f0"}}>Creatina 5g</strong> · Con shake + banana<br/>
-                  ⚡ <strong style={{color:"#e8e8f0"}}>Whey isolate 30g</strong> · Dentro de 45 min<br/>
-                  🌙 <strong style={{color:"#e8e8f0"}}>Magnesio glicinato 400mg</strong> · 30 min antes de dormir<br/>
-                  🌙 <strong style={{color:"#e8e8f0"}}>Rosuvastatina</strong> · Con cena · Síntesis nocturna
-                </div>
-              </div>
-            </div>
-            </>)}
-
-            {/* ── Próximos pasos clínicos ── */}
-            <div className="sec-h">Próximos Pasos Clínicos</div>
-            <div className="card">
-              {[
-                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días`},
-                lastInbody && lastInbody.m < (targets.protein/2) && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg — priorizar proteína post-entreno`},
-                avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
-                labResults.length>0 && labResults[labResults.length-1]?.hba1c>=5.7 && {icon:"🩺",text:`HbA1c ${labResults[labResults.length-1]?.hba1c}% — caminar 15 min post-almuerzo y reducir carbos simples`},
-                {icon:"📊",text:"Check InBody cada 6–8 semanas para medir progreso"},
-                labResults.length===0 && {icon:"🔬",text:"Agrega tus resultados de laboratorio en la sección LABS para recomendaciones personalizadas"},
-              ].filter(Boolean).map((item,i)=>(
-                <div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid rgba(42,42,56,.4)",alignItems:"flex-start"}}>
-                  <span style={{fontSize:18,flexShrink:0}}>{item.icon}</span>
-                  <span style={{fontSize:12,color:"#8888a8",lineHeight:1.5}}>{item.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          );
-        })()}
-
-
-        {/* ══ HÁBITOS ══ */}
-        {tab==="habitos" && (
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div className="sec-h" style={{margin:0}}>Hábitos — Adaptativo con IA</div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button className="btn-sm" onClick={generateAiHabits}
-                  disabled={aiHabitsLoading||(!!aiHabits&&!aiHabits.error&&!isCacheExpired(aiHabitsTs))}
-                  style={{background:"#a8ff3e",color:"#080810",border:"none"}}>
-                  {aiHabitsLoading?<span>Analizando<span className="dots"><span/><span/><span/></span></span>:isCacheExpired(aiHabitsTs)||!aiHabits?"⚡ ACTUALIZAR":"✓ LISTO"}
-                </button>
-                {aiHabitsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{fmtCacheAge(aiHabitsTs)}</span>}
-                {aiHabits&&!aiHabitsLoading&&<button className="btn-sm" onClick={()=>{setAiHabits(null);setAiHabitsTs(null);if(user)setAiCache(user.id,"ai_habits",null).catch(()=>{});}} style={{fontSize:"8px",background:"#1a1a22",color:"#8888a8",border:"1px solid #2a2a38"}}>↻</button>}
-              </div>
-            </div>
-            {/* AI Habits */}
-            {aiHabits?.error && <div className="ins ir"><strong>Error</strong>{aiHabits.error}</div>}
-            {aiHabits && !aiHabits.error ? (
-              <div className="fade-in">
-                {aiHabits.fecha_analisis && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:14,letterSpacing:".1em"}}>ANÁLISIS: {aiHabits.fecha_analisis}</div>}
-                {aiHabits.habitos?.map((h,i)=>{
-                  const prioColor = h.prioridad==="CRÍTICO"?"#ff4d4d":h.prioridad==="IMPORTANTE"?"#ffb830":"#3ddc84";
-                  return (
-                    <div key={i} style={{display:"flex",gap:16,alignItems:"flex-start",background:"#1a1a22",border:`1px solid ${prioColor}30`,borderLeft:`3px solid ${prioColor}`,borderRadius:"0 4px 4px 0",padding:"16px 18px",marginBottom:10}}>
-                      <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{h.icono}</div>
-                      <div style={{flex:1}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15}}>{h.titulo}</div>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",padding:"2px 7px",borderRadius:2,background:`${prioColor}20`,color:prioColor,letterSpacing:".1em"}}>{h.prioridad}</span>
-                        </div>
-                        <div style={{fontSize:12,color:"#8888a8",lineHeight:1.6,marginBottom:8}}>{h.descripcion}</div>
-                        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                          {h.impacto?.map(tag=>(
-                            <span key={tag} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:"2px 8px",borderRadius:2,background:"#4dc8ff18",color:"#4dc8ff",letterSpacing:".06em"}}>{tag}</span>
-                          ))}
-                          {h.badges?.map(tag=>(
-                            <span key={tag} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:"2px 8px",borderRadius:2,background:"#a8ff3e18",color:"#a8ff3e",letterSpacing:".06em"}}>{tag}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {aiHabits.proximos_pasos_clinicos && (
-                  <>
-                    <div className="sec-h" style={{marginTop:20}}>Próximos Pasos Clínicos</div>
-                    <div className="card">
-                      {aiHabits.proximos_pasos_clinicos.map((paso,i)=>(
-                        <div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                          <span style={{color:"#a8ff3e",flexShrink:0,fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>{i+1}.</span>
-                          <span style={{fontSize:13,color:"#8888a8",lineHeight:1.5}}>{paso}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : !aiHabitsLoading && (
-              <div>
-                <div className="ins ib" style={{marginBottom:16}}>
-                  <strong>💡 Hábitos con IA</strong>
-                  Presiona "ACTUALIZAR" para que la IA analice tu log reciente y genere hábitos personalizados a tus marcadores y patrones de alimentación actuales.
-                </div>
-                <div style={{textAlign:"center",padding:"32px 0",color:"#44445a"}}>
-                  <div style={{fontSize:36,marginBottom:12}}>🤖</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,marginBottom:8,color:"#44445a"}}>Sin hábitos generados aún</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>
-                    Registra al menos 3 días de comidas<br/>y presiona ACTUALIZAR para generar<br/>hábitos personalizados con IA.
-                  </div>
-                </div>
-                {false && HABITS.map((h,i)=>(
-                  <div key={i} style={{display:"flex",gap:16,alignItems:"flex-start",background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,padding:"16px 18px",marginBottom:10}}>
-                    <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{h.icon}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,marginBottom:4}}>{h.title}</div>
-                      <div style={{fontSize:12,color:"#8888a8",lineHeight:1.6,marginBottom:8}}>{h.desc}</div>
-                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                        {h.badges.reduce((a,b,i,arr)=>{if(i%2===0)a.push([b,arr[i+1]]);return a;},[]).map(([c,l])=>(
-                          <span key={l} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:"2px 8px",borderRadius:2,background:`${c}18`,color:c,letterSpacing:".06em"}}>{l}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ ANÁLISIS ══ */}
-        {tab==="analisis" && (
-          <div>
-
-            {/* ── Alertas Automáticas (sin API) ── */}
-            {(()=>{
-              const _d14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
-              const _e14 = _d14.flatMap(d=>log[d]||[]);
-              const _ld14 = _d14.filter(d=>(log[d]||[]).length>0).length;
-              const avgP14 = _ld14>0?Math.round(_e14.reduce((s,e)=>s+(e.protein||0),0)/_ld14):0;
-              const avgK14 = _ld14>0?Math.round(_e14.reduce((s,e)=>s+(e.calories||0),0)/_ld14):0;
-              const abPct14 = _e14.length>0?Math.round(_e14.filter(e=>e.grade==="A"||e.grade==="B").length/_e14.length*100):0;
-              const alerts = [];
-              if(avgP14>0 && avgP14<targets.protein*0.85) alerts.push({type:"warn",icon:"💪",title:"Proteína insuficiente",text:`Promedio ${avgP14}g/día vs meta ${targets.protein}g. Agrega fuente proteica en snack y post-entreno.`});
-              if(avgK14>0 && avgK14>targets.calories*1.12) alerts.push({type:"warn",icon:"⚡",title:"Exceso calórico sostenido",text:`Promedio ${avgK14} kcal vs meta ${targets.calories} (${avgK14-targets.calories} kcal extra/día). Revisa las cenas.`});
-              if(abPct14>0 && abPct14<50) alerts.push({type:"bad",icon:"📊",title:"Calidad nutricional baja",text:`Solo ${abPct14}% de comidas en A/B (14 días). Impacta LDL, HbA1c y recomposición.`});
-              if(abPct14>=70) alerts.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de recomposición.`});
-              if(alerts.length===0) return null;
-              return (
-                <div style={{marginBottom:20}}>
-                  <div className="sec-h">Alertas Automáticas</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Insights automáticos, Hall of Fame/Shame y análisis profundo con IA.</p>
-                  {alerts.map((a,i)=>(
-                    <div key={i} className={`ins ${a.type==="good"?"ig":a.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
-                      <strong>{a.icon} {a.title}</strong>
-                      <div style={{marginTop:4,fontWeight:400}}>{a.text}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* AI Analysis CTA */}
-
-            {/* Divider */}
-
-            {/* ── HALL OF FAME & SHAME ── */}
-            {(() => {
-              const all14 = Object.entries(log)
-                .filter(([d])=>{ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14); return d>=`${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`; })
-                .flatMap(([d,entries])=>entries.map(e=>({...e,date:d})));
-              if(all14.length<3) return null;
-              const scored = all14.map(e=>({
-                ...e,
-                _score: (e.score||5)*10
-                  + (e.grade==="A"?30:e.grade==="B"?15:e.grade==="C"?0:e.grade==="D"?-20:-35)
-                  + (e.ldl_impact==="positivo"?15:e.ldl_impact==="negativo"?-15:0)
-                  + (e.hba1c_impact==="positivo"?10:e.hba1c_impact==="negativo"?-10:0)
-              }));
-              const fame  = [...scored].sort((a,b)=>b._score-a._score).slice(0,3);
-              const shame = [...scored].sort((a,b)=>a._score-b._score).slice(0,3);
-              return (
-                <div className="g2" style={{marginBottom:20}}>
-                  <div>
-                    <div className="sec-h">🏆 Hall of Fame — 14 días</div>
-                    {fame.map((e,i)=>(
-                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #3ddc84",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#3ddc84"}}>#{i+1}</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"B")}}>{e.grade||"B"}</span>
-                        </div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4}}>{e.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
-                          {e.meal&&<span style={{color:"#a8ff3e",marginRight:6}}>{e.meal}</span>}
-                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
-                        </div>
-                        {e.notes && <div style={{fontSize:11,color:"#3ddc84"}}>💡 {e.notes}</div>}
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div className="sec-h">💀 Hall of Shame — 14 días</div>
-                    {shame.map((e,i)=>(
-                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #ff4d4d",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#ff4d4d"}}>#{i+1}</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"C")}}>{e.grade||"C"}</span>
-                        </div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4}}>{e.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
-                          {e.meal&&<span style={{color:"#ff7a4d",marginRight:6}}>{e.meal}</span>}
-                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
-                        </div>
-                        {e.alerta && <div style={{fontSize:11,color:"#ffb830"}}>⚠️ {e.alerta}</div>}
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── Análisis de Patrones con IA ── */}
-            <div className="sec-h">Análisis de Patrones Nutricionales</div>
-            <div style={{marginBottom:20}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                <button className="btn" style={{flex:1}} onClick={generateWeekInsights} disabled={weekInsightsLoading||(!isCacheExpired(weekInsightsTs)&&!!weekInsights&&!weekInsights.error)}>
-                  {weekInsightsLoading?<span>ANALIZANDO <span className="dots"><span/><span/><span/></span></span>:isCacheExpired(weekInsightsTs)||!weekInsights?"🧠 ANALIZAR PATRONES (14 días)":"✓ ANALIZADO"}
-                </button>
-                {weekInsightsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",whiteSpace:"nowrap"}}>{fmtCacheAge(weekInsightsTs)}</span>}
-                {weekInsights && !weekInsightsLoading && <button className="btn-sm" onClick={()=>{setWeekInsights(null);setWeekInsightsTs(null);if(user)setAiCache(user.id,"week_insights",null).catch(()=>{});}} style={{flexShrink:0,fontSize:"8px"}}>↻</button>}
-              </div>
-              {weekInsights && !weekInsights.error && (
-                <div className="fade-in">
-                  <div className="card" style={{borderLeft:"3px solid #a8ff3e",borderRadius:"0 4px 4px 0",marginBottom:10}}>
-                    <div className="lbl" style={{marginBottom:8}}>Resumen de Patrones</div>
-                    <p style={{fontSize:13,color:"#8888a8",lineHeight:1.6}}>{weekInsights.weekly_summary}</p>
-                    <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-                      {weekInsights.grade_avg && <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(weekInsights.grade_avg)}}>{weekInsights.grade_avg}</span>}
-                      {weekInsights.ldl_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.ldl_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>LDL {impactArrow(weekInsights.ldl_score)} {weekInsights.ldl_score}</span>}
-                      {weekInsights.hba1c_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.hba1c_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>HbA1c {impactArrow(weekInsights.hba1c_score)} {weekInsights.hba1c_score}</span>}
-                      {weekInsights.protein_compliance && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#4dc8ff",background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>Proteína: {weekInsights.protein_compliance}</span>}
-                    </div>
-                  </div>
-                  {weekInsights.pattern_alerts?.length>0 && (
-                    <div className="ins ir" style={{marginBottom:8}}>
-                      <strong>⚠ Patrones a corregir</strong>
-                      {weekInsights.pattern_alerts.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}
-                    </div>
-                  )}
-                  {weekInsights.pattern_wins?.length>0 && (
-                    <div className="ins ig" style={{marginBottom:8}}>
-                      <strong>✅ Hábitos positivos detectados</strong>
-                      {weekInsights.pattern_wins.map((w,i)=><div key={i} style={{marginTop:4}}>• {w}</div>)}
-                    </div>
-                  )}
-                  {(weekInsights.top_foods?.length>0||weekInsights.avoid_foods?.length>0) && (
-                    <div className="g2">
-                      {weekInsights.top_foods?.length>0 && (
-                        <div className="card" style={{borderTop:"2px solid #3ddc84"}}>
-                          <div className="lbl" style={{marginBottom:8}}>🏆 Mejores opciones</div>
-                          {weekInsights.top_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#3ddc84",marginTop:4}}>✓ {f}</div>)}
-                        </div>
-                      )}
-                      {weekInsights.avoid_foods?.length>0 && (
-                        <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
-                          <div className="lbl" style={{marginBottom:8}}>⚠ Reducir / eliminar</div>
-                          {weekInsights.avoid_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#ff7a4d",marginTop:4}}>✗ {f}</div>)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {weekInsights?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{weekInsights.error}</div>}
-            </div>
-
-            <div style={{borderTop:"1px solid #2a2a38",margin:"24px 0"}}/>
-
-            {/* Prompt to generate AI insights if none yet */}
-            {!weekInsights && !weekInsightsLoading && (
-              <div style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
-                <div style={{fontSize:32,marginBottom:10}}>🧠</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,color:"#44445a",marginBottom:6}}>Sin análisis generado aún</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>
-                  Presiona "ANALIZAR PATRONES" arriba<br/>para generar insights personalizados con IA.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ CONFIG ══ */}
-        {tab==="score" && (()=>{
-          const ms = calcMetabolicScore(labResults, allInbody, log, targets);
-          const lab  = labResults[labResults.length-1] || null;
-          const body = allInbody[allInbody.length-1]   || null;
-          const scoreColor = !ms ? "#44445a" : ms.score>=80?"#3ddc84":ms.score>=65?"#ffb830":ms.score>=50?"#ff9940":"#ff4d4d";
-          const statusLabel = !ms?"SIN DATOS":ms.score>=80?"ÓPTIMO":ms.score>=65?"BUENO":ms.score>=50?"MODERADO":"ATENCIÓN";
-
-          return (
-          <div className="fade-in" style={{padding:"28px 24px",maxWidth:700,margin:"0 auto"}}>
-
-            {/* ── Big Score ── */}
-            <div style={{display:"flex",alignItems:"center",gap:24,marginBottom:28}}>
-              <div style={{position:"relative",width:96,height:96,flexShrink:0}}>
-                <svg viewBox="0 0 96 96" style={{width:96,height:96,transform:"rotate(-90deg)"}}>
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="#1a1a22" strokeWidth="8"/>
-                  {ms && <circle cx="48" cy="48" r="40" fill="none" stroke={scoreColor} strokeWidth="8"
-                    strokeDasharray={`${ms.score*2.513} 251.3`} strokeLinecap="round"/>}
-                </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:scoreColor,lineHeight:1}}>{ms?.score ?? "—"}</span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em"}}>/ 100</span>
-                </div>
-              </div>
-              <div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:4}}>METABOLIC HEALTH SCORE</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:scoreColor,lineHeight:1,marginBottom:6}}>{statusLabel}</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
-                  {ms ? `Basado en ${ms.components.length} indicadores disponibles` : "Agrega labs e InBody para calcular tu score"}
-                </div>
-              </div>
-            </div>
-
-            {ms && (<>
-
-            {/* ── Components breakdown ── */}
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:10}}>DESGLOSE POR COMPONENTE</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-              {ms.components.map((comp,i)=>{
-                const cColor = comp.status==="ok"?"#3ddc84":comp.status==="warn"?"#ffb830":"#ff4d4d";
-                const barPct = comp.status==="ok"?85+Math.random()*15:comp.status==="warn"?50+Math.random()*20:15+Math.random()*25;
-                return (
-                  <div key={i} style={{background:"#131318",border:"1px solid #2a2a38",borderRadius:4,padding:"12px 16px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>
-                        <span style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:13,color:"#e8e8f0"}}>{comp.label}</span>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:cColor}}>{comp.value}</span>
-                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>meta: {comp.target}</span>
-                      </div>
-                    </div>
-                    <div style={{height:3,background:"#1a1a22",borderRadius:2}}>
-                      <div style={{height:3,background:cColor,borderRadius:2,width:`${Math.min(100,barPct)}%`,transition:"width 1s ease"}}/>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Advanced metrics ── */}
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:10}}>MÉTRICAS AVANZADAS</div>
-            <div className="g2" style={{gap:8,marginBottom:24}}>
-              {/* TG/HDL */}
-              {lab?.tg && lab?.hdl && (()=>{
-                const ratio = +(lab.tg/lab.hdl).toFixed(2);
-                const st = ratio<1.5?"ok":ratio<2.5?"warn":"bad";
-                const col = st==="ok"?"#3ddc84":st==="warn"?"#ffb830":"#ff4d4d";
-                return (
-                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>TG / HDL RATIO</div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{ratio}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
-                      {ratio<1.5?"✓ Excelente — bajo riesgo CV":ratio<2.5?"↑ Moderado — meta <1.5":"⚠ Alto — riesgo cardiometabólico"}
-                    </div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>TG {lab.tg} · HDL {lab.hdl}</div>
-                  </div>
-                );
-              })()}
-              {/* HOMA-IR */}
-              {lab?.glucose && lab?.insulin ? (()=>{
-                const homa = +((lab.glucose * lab.insulin)/405).toFixed(2);
-                const st = homa<1.5?"ok":homa<2.5?"warn":"bad";
-                const col = st==="ok"?"#3ddc84":st==="warn"?"#ffb830":"#ff4d4d";
-                return (
-                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>HOMA-IR</div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{homa}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
-                      {homa<1.0?"✓ Sensibilidad insulínica óptima":homa<1.5?"✓ Normal":homa<2.5?"↑ Resistencia leve — meta <1.5":"⚠ Resistencia a insulina"}
-                    </div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>Glucosa {lab.glucose} · Insulina {lab.insulin}</div>
-                  </div>
-                );
-              })() : (
-                <div style={{background:"#131318",border:"1px solid #2a2a38",borderRadius:4,padding:"14px 16px",opacity:.5}}>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>HOMA-IR</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#44445a"}}>—</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>Requiere glucosa + insulina en ayunas</div>
-                </div>
-              )}
-              {/* Protein adequacy */}
-              {body && (()=>{
-                const logDays = Object.keys(log).slice(-7);
-                if (!logDays.length) return null;
-                const avgProt = Math.round(logDays.reduce((a,d)=>a+(log[d]||[]).reduce((s,e)=>s+(e.protein||0),0),0)/logDays.length);
-                const ratio = body.w ? +(avgProt/body.w).toFixed(2) : null;
-                const st = !ratio?"ok":ratio>=1.6?"ok":ratio>=1.2?"warn":"bad";
-                const col = st==="ok"?"#4dc8ff":st==="warn"?"#ffb830":"#ff4d4d";
-                return (
-                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>PROTEÍNA / KG · PROM 7D</div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{ratio ?? "—"}<span style={{fontSize:14,fontWeight:400,color:"#44445a"}}> g/kg</span></div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
-                      {!ratio?"Sin datos":ratio>=1.6?"✓ Óptimo para recomposición":ratio>=1.2?"↑ Adecuado — meta 1.6–2.2 g/kg":"⚠ Bajo — aumenta proteína diaria"}
-                    </div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>Prom {avgProt}g/d · Peso {body.w}kg</div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* ── Wearables coming soon ── */}
-            <div style={{background:"rgba(168,255,62,.03)",border:"1px dashed rgba(168,255,62,.15)",borderRadius:4,padding:"16px",marginBottom:24}}>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".2em",marginBottom:6}}>PRÓXIMAMENTE — WEARABLES</div>
-              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                {["⌚ Apple Watch","💚 Garmin","⚫ Whoop","💍 Oura"].map(w=>(
-                  <span key={w} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:12,color:"#44445a",background:"#1a1a22",padding:"4px 10px",borderRadius:3}}>{w}</span>
-                ))}
-              </div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:8}}>
-                Sueño · HRV · Resting HR · Actividad física → enriquecerán el Score Metabólico
-              </div>
-            </div>
-
-            </>)}
-
-            {!ms && (
-              <div style={{textAlign:"center",padding:"40px 0"}}>
-                <div style={{fontSize:40,marginBottom:12}}>🧬</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:18,color:"#44445a",marginBottom:8}}>Sin datos suficientes</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",lineHeight:1.7}}>
-                  Agrega resultados de laboratorio en la sección LABS<br/>
-                  o registra tu InBody en CUERPO para activar el Score.
-                </div>
-              </div>
-            )}
-          </div>
-          );
-        })()}
-
-        {tab==="config" && (
-          <div>
-            <div className="sec-h">Perfil de Usuario</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Este perfil alimenta todos los análisis y rutinas con IA. Mantenlo actualizado.</p>
-            <div className="card" style={{marginBottom:14}}>
-              <ProfileEditor userProfile={userProfile} onSave={saveUserProfile}/>
-            </div>
-
-                        <div className="sec-h">Objetivos Nutricionales</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Ajusta tus objetivos de macros, gestiona favoritos y haz backup de tu data.</p>
-            <div className="card" style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700}}>Macros diarios</span>
-                <button className="btn-sm" onClick={()=>{ setEditTargets(!editTargets); setTmpTargets(targets); }}>
-                  {editTargets?"CANCELAR":"EDITAR"}
-                </button>
-              </div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12,letterSpacing:".08em"}}>
-                {`Calculados para ${userProfile.goals.slice(0,30)}... · ${allInbody[allInbody.length-1]?.w||"—"} kg · TMB ${allInbody[allInbody.length-1] ? Math.round(370+21.6*allInbody[allInbody.length-1].m).toLocaleString() : "—"} kcal`}
-              </div>
-              {MACRO_KEYS.map(k=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <span style={{fontSize:13,color:"#8888a8"}}>{MACRO_CFG[k].label}</span>
-                  {editTargets
-                    ? <input type="number" value={tmpTargets[k]} onChange={e=>setTmpTargets({...tmpTargets,[k]:Number(e.target.value)})} className="inp" style={{width:90,padding:"5px 8px",fontSize:13}}/>
-                    : <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:MACRO_CFG[k].color}}>{targets[k]} <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#8888a8"}}>{MACRO_CFG[k].unit}</span></span>
-                  }
-                </div>
-              ))}
-              {editTargets && (
-                <button className="btn" style={{width:"100%"}} onClick={()=>{ saveTargets(tmpTargets); setEditTargets(false); }}>
-                  ✓ GUARDAR OBJETIVOS
-                </button>
-              )}
-            </div>
-            <div className="sec-h">Alimentos Favoritos</div>
-            <div className="card" style={{marginBottom:14}}>
-              <button className="btn-sm" style={{width:"100%",marginBottom:12}} onClick={()=>setShowFavForm(!showFavForm)}>
-                {showFavForm?"✕ CANCELAR":"+ NUEVO FAVORITO"}
-              </button>
-              {showFavForm && (
-                <div style={{marginBottom:12,padding:"12px",background:"#1a1a22",borderRadius:3}}>
-                  <input placeholder="Nombre del alimento" value={favForm.name}
-                    onChange={e=>setFavForm({...favForm,name:e.target.value})} className="inp" style={{marginBottom:8}}/>
-                  <div className="g2" style={{gap:8}}>
-                    {MACRO_KEYS.map(k=>(
-                      <input key={k} placeholder={`${MACRO_CFG[k].label} (${MACRO_CFG[k].unit})`}
-                        type="number" value={favForm[k]||""} onChange={e=>setFavForm({...favForm,[k]:e.target.value})}
-                        className="inp"/>
-                    ))}
-                  </div>
-                  <button className="btn" style={{width:"100%",marginTop:10}} onClick={()=>{
-                    if(favForm.name) {
-                      const nf2={...favForm,id:Date.now(),calories:Number(favForm.calories),protein:Number(favForm.protein),carbs:Number(favForm.carbs),fats:Number(favForm.fats)}; saveFavs([...favs,nf2],nf2.id);
-                      setFavForm({name:"",calories:0,protein:0,carbs:0,fats:0}); setShowFavForm(false);
-                    }
-                  }}>✓ GUARDAR</button>
-                </div>
-              )}
-              {favs.length===0
-                ? <p style={{fontFamily:"'JetBrains Mono',monospace",color:"#44445a",fontSize:10,textAlign:"center",padding:"12px 0",letterSpacing:".1em"}}>SIN FAVORITOS AÚN</p>
-                : favs.map(f=>(
-                    <div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                      <div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13}}>{f.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>{f.calories}kcal · {f.protein}g P · {f.carbs}g C · {f.fats}g F</div>
-                      </div>
-                      <button onClick={()=>{deleteFavorite(f.id).catch(()=>{}); saveFavs(favs.filter(x=>x.id!==f.id));}} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
-                    </div>
-                  ))
-              }
-            </div>
-            <div className="sec-h">Backup & Restaurar</div>
-            <div className="card">
-              <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
-                Exporta un backup JSON con todo tu log de comidas, favoritos, objetivos, InBody y labs personalizados. Importa para restaurar entre sesiones.
-              </p>
-              <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(61,220,132,.08)",color:"#3ddc84",border:"1px solid rgba(61,220,132,.3)"}} onClick={exportData}>
-                ⬇ EXPORTAR BACKUP COMPLETO (.JSON)
-              </button>
-              <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(77,200,255,.08)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>{setImportText("");setImportJson(true);}}>
-                ⬆ RESTAURAR — PEGAR JSON
-              </button>
-              <button className="btn" style={{width:"100%",background:"rgba(77,200,255,.04)",color:"#44445a",border:"1px solid #1e1e2a",fontSize:10}} onClick={()=>backupRef.current.click()}>
-                ⬆ RESTAURAR — SUBIR ARCHIVO
-              </button>
-            </div>
-          </div>
-        )}
-
-
-      {/* ══ IMPORT MODAL ══ */}
-      {importJson && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setImportJson(null)}>
-          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#e8e8f0",marginBottom:6}}>RESTAURAR BACKUP</div>
-            <div style={{fontSize:10,color:"#44445a",marginBottom:12,lineHeight:1.6}}>Pega el JSON copiado desde el backup o desde la consola del navegador.</div>
-            <textarea
-              value={importText}
-              onChange={e=>setImportText(e.target.value)}
-              placeholder='{"log":{...},"favs":[...]}'
-              style={{flex:1,minHeight:220,background:"#0c0c0f",border:"1px solid #2a2a38",borderRadius:4,color:"#e8e8f0",fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:12,resize:"vertical",outline:"none",marginBottom:12}}
-            />
-            <div style={{display:"flex",gap:8}}>
-              <button className="btn" style={{flex:1,background:"rgba(77,200,255,.12)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>applyImport(importText)}>
-                ✓ RESTAURAR
-              </button>
-              <button className="btn-sm" onClick={()=>setImportJson(null)}>CANCELAR</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ EXPORT MODAL ══ */}
-      {exportJson && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setExportJson(null)}>
-          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".18em"}}>⬇ BACKUP JSON — SELECCIONA TODO Y COPIA</div>
-              <button onClick={()=>setExportJson(null)} style={{background:"none",border:"none",color:"#8888a8",cursor:"pointer",fontSize:18,lineHeight:1}}>✕</button>
-            </div>
-            <p style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace",marginBottom:10}}>
-              Selecciona todo el texto (Ctrl+A / Cmd+A) → Copia → Pega en un archivo .json
-            </p>
-            <textarea
-              ref={exportTextareaRef}
-              readOnly
-              value={exportJson}
-              onFocus={e=>e.target.select()}
-              style={{flex:1,minHeight:300,background:"#0c0c0f",border:"1px solid #2a2a38",borderRadius:3,color:"#3ddc84",fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:12,resize:"none",lineHeight:1.5}}
-            />
-            <div style={{display:"flex",gap:8,marginTop:12}}>
-              <button className="btn" style={{flex:1}} onClick={()=>{
-                const ta = exportTextareaRef.current;
-                if (ta) { ta.select(); ta.setSelectionRange(0,99999); try { if(document.execCommand('copy')){ alert("✓ Copiado al portapapeles"); return; } }catch(_){} }
-                if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(exportJson).then(()=>alert("✓ Copiado")).catch(()=>alert("Usa Ctrl+A → Ctrl+C")); }
-                else { alert("Usa Ctrl+A → Ctrl+C para copiar"); }
-              }}>
-                📋 COPIAR AL PORTAPAPELES
-              </button>
-              <button className="btn-sm" onClick={()=>setExportJson(null)}>CERRAR</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      </div>
-      {/* ── MOBILE BOTTOM NAV ── */}
-      <nav className="mobile-bottom-nav" style={{
-        position:"fixed",bottom:0,left:0,right:0,zIndex:100,
-        background:"#0e0e14",borderTop:"1px solid #2a2a38",
-        display:"none", // overridden by CSS on mobile
-        alignItems:"stretch",
-        paddingBottom:"env(safe-area-inset-bottom,0px)",
-      }}>
-        {MODULES.map(m=>{
-          const isActive = activeModule.id === m.id;
-          const ms = m.id==="cuerpo" ? calcMetabolicScore(labResults, allInbody, log, targets) : null;
-          const scoreColor = ms ? (ms.score>=80?"#3ddc84":ms.score>=65?"#ffb830":"#ff4d4d") : null;
-          return (
-            <button key={m.id} onClick={()=>setTab(m.tabs[0][0])} style={{
-              flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-              gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",
-              borderTop: isActive ? "2px solid #a8ff3e" : "2px solid transparent",
-              transition:"all .15s",minWidth:0,
-            }}>
-              <span style={{fontSize:18,lineHeight:1}}>{m.icon}</span>
-              <span style={{
-                fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",letterSpacing:".1em",
-                textTransform:"uppercase",color:isActive?"#a8ff3e":"#44445a",
-                lineHeight:1,whiteSpace:"nowrap",
-              }}>{m.label}</span>
-              {/* Badge indicators */}
-              {m.id==="nutri" && todayLog.length>0 && (
-                <span style={{
-                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
-                  background:todayKcalPct>=90?"rgba(61,220,132,.2)":todayKcalPct>=60?"rgba(255,184,48,.2)":"rgba(255,77,77,.2)",
-                  color:todayKcalPct>=90?"#3ddc84":todayKcalPct>=60?"#ffb830":"#ff4d4d",
-                  borderRadius:2,padding:"1px 4px",letterSpacing:".04em",
-                }}>{todayMacros.calories}k</span>
-              )}
-              {m.id==="cuerpo" && ms && (
-                <span style={{
-                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
-                  background:`${scoreColor}22`,color:scoreColor,
-                  borderRadius:2,padding:"1px 4px",
-                }}>{ms.score}</span>
-              )}
-              {m.id==="entrena" && (
-                <span style={{
-                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
-                  background:isTrainingDay?"rgba(168,255,62,.1)":"rgba(68,68,90,.15)",
-                  color:isTrainingDay?"#a8ff3e":"#44445a",
-                  borderRadius:2,padding:"1px 4px",
-                }}>{isTrainingDay?"HOY":"DESC"}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-    </div>
-    </>
-  );
-}
-const App = dynamic(() => Promise.resolve(AppInner), { ssr: false });
-export default App;
