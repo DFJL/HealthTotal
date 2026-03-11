@@ -934,15 +934,50 @@ Analiza este día y responde SOLO JSON sin backticks:
   };
   const applyImport = (txt) => {
     try {
-      const d=JSON.parse(txt);
-      if(d.log) saveLog(d.log);
-      if(d.favs) saveFavs(d.favs);
-      if(d.targets) saveTargets(d.targets);
-      if(d.customInbody) saveCustomInbody(d.customInbody);
-      if(d.customLabs) saveCustomLabs(d.customLabs);
+      // Strip any console artifacts, backticks, "undefined", leading/trailing noise
+      let clean = txt.trim()
+        .replace(/^[^{[\n]*([\[{])/s, '$1')  // drop anything before first { or [
+        .replace(/```[a-z]*/g,"").replace(/```/g,"").trim();
+
+      let d;
+      try { d = JSON.parse(clean); }
+      catch(e) { alert("JSON inválido:\n" + e.message + "\n\nAsegúrate de copiar el output completo del console."); return; }
+
+      // Auto-detect format:
+      // 1) Full backup: {log:{...}, favs:[...]}
+      // 2) Raw log object: keys look like "2026-03-01"
+      // 3) Raw favs array: top-level array
+      let resolved = {log:null, favs:null, targets:null, customInbody:null, customLabs:null};
+
+      if (d && typeof d === 'object' && !Array.isArray(d)) {
+        if (d.log || d.favs || d.targets) {
+          // Full backup format
+          resolved = d;
+        } else {
+          // Check if keys look like dates → it's a raw log
+          const keys = Object.keys(d);
+          const looksLikeLog = keys.length > 0 && keys.every(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+          if (looksLikeLog) resolved.log = d;
+        }
+      } else if (Array.isArray(d)) {
+        // Probably raw favs array
+        resolved.favs = d;
+      }
+
+      let restored = [];
+      if(resolved.log) { saveLog(resolved.log); restored.push("log de comidas"); }
+      if(resolved.favs) { saveFavs(resolved.favs); restored.push("favoritos"); }
+      if(resolved.targets) { saveTargets(resolved.targets); restored.push("objetivos"); }
+      if(resolved.customInbody) { saveCustomInbody(resolved.customInbody); restored.push("InBody"); }
+      if(resolved.customLabs) { saveCustomLabs(resolved.customLabs); restored.push("labs"); }
+
+      if(restored.length === 0) {
+        alert("No se detectó data válida.\n\nFormatos aceptados:\n• Backup completo: {\"log\":{...},\"favs\":[...]}\n• Log crudo: {\"2026-03-01\":[...], ...}\n• Favoritos: [{...},...]");
+        return;
+      }
       setImportJson(null); setImportText("");
-      alert("✓ Datos restaurados correctamente.");
-    } catch { alert("JSON inválido — revisa el formato e intenta de nuevo."); }
+      alert("✓ Restaurado: " + restored.join(", ") + ".\nRecarga la página para ver los datos.");
+    } catch(e) { alert("Error inesperado: " + e.message); }
   };
 
   const latestLab = LABS_HIST[LABS_HIST.length-1];
