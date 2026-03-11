@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend
@@ -545,6 +546,14 @@ function AppInner() {
     }).catch(console.error);
   };
 
+  // Auto-analyze day insight when switching to a date that has entries but no insight yet
+  useEffect(() => {
+    const entries = log[selDate] || [];
+    if (entries.length > 0 && !dayInsight[selDate] && tab === "hoy" && loaded) {
+      analyzeDayInsight(selDate, entries);
+    }
+  }, [selDate, tab, loaded]);
+
   if (authLoading) return null;
 
   const dayLog     = log[selDate] || [];
@@ -558,14 +567,6 @@ function AppInner() {
   const TRAINING_DAYS = ["PUSH","PULL","LEGS","PUSH","PULL","LEGS","DESCANSO"];
   const todayTraining = TRAINING_DAYS[new Date().getDay()===0?6:new Date().getDay()-1];
   const isTrainingDay = todayTraining !== "DESCANSO";
-
-  // Auto-analyze day insight when switching to a date that has entries but no insight yet
-  useEffect(() => {
-    const entries = log[selDate] || [];
-    if (entries.length > 0 && !dayInsight[selDate] && tab === "hoy" && loaded) {
-      analyzeDayInsight(selDate, entries);
-    }
-  }, [selDate, tab, loaded]);
 
   const navDay = dir => {
     const d = new Date(selDate+"T12:00:00");
@@ -2745,6 +2746,5 @@ Analiza este día y responde SOLO JSON sin backticks:
     </>
   );
 }
-import dynamic from "next/dynamic";
 const App = dynamic(() => Promise.resolve(AppInner), { ssr: false });
 export default App;
