@@ -1446,8 +1446,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* ── CHEAT DAY ANALYZER ── */}
 
-          </div>
-
             <div className="sec-h">Estadísticas del Log Nutricional</div>
             <div className="g4" style={{marginBottom:20}}>
               {[
@@ -1463,6 +1461,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               ))}
             </div>
+          </div>
         )}
 
         {/* ══ CUERPO ══ */}
