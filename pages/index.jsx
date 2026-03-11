@@ -1119,8 +1119,10 @@ Analiza este día y responde SOLO JSON sin backticks:
       <div style={{padding:"32px 44px 26px",borderBottom:"1px solid #2a2a38",display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:16,flexWrap:"wrap",background:"#131318",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"-80px",right:"-60px",width:"420px",height:"420px",background:"radial-gradient(circle,rgba(168,255,62,.05),transparent 65%)",pointerEvents:"none"}}/>
         <div>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>{`Dashboard Integral · ${allInbody.length>0 ? allInbody[allInbody.length-1].d : 'Sin datos'}`}</div>
-          <div style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(36px,7vw,72px)",fontWeight:800,lineHeight:.9,letterSpacing:"-.01em"}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>
+            {`Metabolic Health OS · ${new Date().toLocaleDateString("es-CR",{month:"short",year:"numeric"})}`}
+          </div>
+          <div style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(20px,3.5vw,44px)",fontWeight:800,lineHeight:.95,letterSpacing:"-.01em"}}>
             {(()=>{
               const parts = (userProfile.name||"Usuario").toUpperCase().trim().split(" ");
               if(parts.length===1) return <span style={{color:"#a8ff3e"}}>{parts[0]}</span>;
