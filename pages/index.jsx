@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
@@ -312,9 +312,9 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 
 
 function ProfileEditor({ userProfile, onSave }) {
-  const [editing, setEditing] = React.useState(false);
-  const [tmp, setTmp] = React.useState(userProfile);
-  React.useEffect(() => { if (!editing) setTmp(userProfile); }, [userProfile, editing]);
+  const [editing, setEditing] = useState(false);
+  const [tmp, setTmp] = useState(userProfile);
+  useEffect(() => { if (!editing) setTmp(userProfile); }, [userProfile, editing]);
   if (!editing) return (
     <div>
       <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Objetivos:</strong> {userProfile.goals}</div>
