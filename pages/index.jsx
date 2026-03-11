@@ -705,7 +705,9 @@ Analiza este día y responde SOLO JSON sin backticks:
 {"status":"verde|amarillo|rojo","titulo":"frase corta del estado del día (max 8 palabras)","resumen":"análisis de 2-3 oraciones: qué está yendo bien, qué mejorar, impacto en LDL/HbA1c","proteina_pct":número_0_a_100,"calorias_pct":número_0_a_100,"ldl_net":"positivo|neutro|negativo","hba1c_net":"positivo|neutro|negativo","tip":"1 consejo accionable concreto para el resto del día"}`}]})});
       const data = await res.json();
       const rawText = data.content.map(b=>b.text||"").join("");
-      const parsed = extractJSON(rawText);
+      const m3 = rawText.match(/\{[\s\S]*\}/);
+      if (!m3) throw new Error("No JSON in response");
+      const parsed = extractJSON(txt3);
       setDayInsight(prev=>({...prev,[dateKey]:parsed}));
     } catch(e) {
       setDayInsight(prev=>({...prev,[dateKey]:{status:"amarillo",titulo:"Error al analizar",resumen:"No se pudo generar el análisis. Intenta de nuevo.",tip:""}}));
@@ -1180,7 +1182,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       onDrop={handleDrop}>
                       <input ref={imgRef} type="file" accept="image/*" capture="environment" onChange={handleImg}/>
                       {aiImage
-                        ? <img src={aiImage} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,display:"block"}}/>
+                        ? <img src={aiImage} alt="" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:3,display:"block"}}/>
                         : <><div style={{fontSize:28,marginBottom:6}}>📷</div>
                             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",letterSpacing:".1em"}}>SUBIR FOTO DEL PLATO</div>
                             <div style={{fontSize:12,color:"#44445a",marginTop:4}}>click, arrastrá o pegá una imagen</div></>
@@ -1287,7 +1289,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       {e.score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{e.score}/10</span>}
                     </div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:14,marginBottom:6}}>{e.name}</div>
-                    {e.image && <img src={e.image} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,marginBottom:6,display:"block"}}/>}
+                    {e.image && <img src={e.image} alt="" style={{width:"100%",height:120,objectFit:"cover",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",marginBottom:4}}>
                       <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span> · <span style={{color:"#a8ff3e"}}>{e.carbs}g C</span> · <span style={{color:"#ff7a4d"}}>{e.fats}g F</span>
                     </div>
@@ -1418,57 +1420,6 @@ Analiza este día y responde SOLO JSON sin backticks:
               ))}
             </div>
 
-            {/* Pattern AI insights */}
-            <div className="sec-h">Análisis de Patrones con IA</div>
-            <div style={{marginBottom:14}}>
-              <button className="btn" style={{width:"100%",marginBottom:10}} onClick={generateWeekInsights} disabled={weekInsightsLoading}>
-                {weekInsightsLoading?<span>ANALIZANDO PATRONES <span className="dots"><span/><span/><span/></span></span>:"🧠 GENERAR INSIGHTS NUTRICIONALES"}
-              </button>
-              {weekInsights && !weekInsights.error && (
-                <div className="fade-in">
-                  <div className="card" style={{borderLeft:"3px solid #a8ff3e",borderRadius:"0 4px 4px 0",marginBottom:10}}>
-                    <div className="lbl" style={{marginBottom:8}}>Resumen Semanal</div>
-                    <p style={{fontSize:13,color:"#8888a8",lineHeight:1.6}}>{weekInsights.weekly_summary}</p>
-                    <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-                      {weekInsights.grade_avg && <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(weekInsights.grade_avg)}}>{weekInsights.grade_avg}</span>}
-                      {weekInsights.ldl_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.ldl_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>LDL {impactArrow(weekInsights.ldl_score)} {weekInsights.ldl_score}</span>}
-                      {weekInsights.hba1c_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.hba1c_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>HbA1c {impactArrow(weekInsights.hba1c_score)} {weekInsights.hba1c_score}</span>}
-                      {weekInsights.protein_compliance && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#4dc8ff",background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>Proteína: {weekInsights.protein_compliance}</span>}
-                    </div>
-                  </div>
-                  {weekInsights.pattern_alerts?.length>0 && (
-                    <div className="ins ir" style={{marginBottom:8}}>
-                      <strong>⚠ Patrones a corregir</strong>
-                      {weekInsights.pattern_alerts.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}
-                    </div>
-                  )}
-                  {weekInsights.pattern_wins?.length>0 && (
-                    <div className="ins ig" style={{marginBottom:8}}>
-                      <strong>✅ Hábitos positivos detectados</strong>
-                      {weekInsights.pattern_wins.map((w,i)=><div key={i} style={{marginTop:4}}>• {w}</div>)}
-                    </div>
-                  )}
-                  {(weekInsights.top_foods?.length>0||weekInsights.avoid_foods?.length>0) && (
-                    <div className="g2">
-                      {weekInsights.top_foods?.length>0 && (
-                        <div className="card" style={{borderTop:"2px solid #3ddc84"}}>
-                          <div className="lbl" style={{marginBottom:8}}>🏆 Mejores opciones</div>
-                          {weekInsights.top_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#3ddc84",marginTop:4}}>✓ {f}</div>)}
-                        </div>
-                      )}
-                      {weekInsights.avoid_foods?.length>0 && (
-                        <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
-                          <div className="lbl" style={{marginBottom:8}}>⚠ Reducir / eliminar</div>
-                          {weekInsights.avoid_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#ff7a4d",marginTop:4}}>✗ {f}</div>)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {weekInsights?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{weekInsights.error}</div>}
-              {weekInsights?.text && <div className="ins" style={{marginTop:8}}>{weekInsights.text}</div>}
-            </div>
 
             {/* Summary table */}
             <div className="sec-h">Resumen por Día — 14 días</div>
@@ -1500,124 +1451,6 @@ Analiza este día y responde SOLO JSON sin backticks:
             </div>
 
             {/* ── CHEAT DAY ANALYZER ── */}
-            {(() => {
-              const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
-              const cheatDays = days7.filter(d=>{
-                const e=log[d]||[]; if(!e.length) return false;
-                const kcal=calcMacros(e).calories;
-                const bad=e.filter(x=>x.grade==="D"||x.grade==="F").length;
-                return kcal>targets.calories*1.3 || bad/e.length>=0.5;
-              });
-              const goodDays = days7.filter(d=>{
-                const e=log[d]||[]; if(!e.length) return false;
-                const ab=e.filter(x=>x.grade==="A"||x.grade==="B").length;
-                return ab/e.length>=0.7 && calcMacros(e).protein>=targets.protein*0.85;
-              });
-              const totalLogged = days7.filter(d=>(log[d]||[]).length>0).length;
-              if(totalLogged<3) return null;
-              const cheatRatio = cheatDays.length / totalLogged;
-              const isFlexible = cheatDays.length===1 && goodDays.length>=3;
-              const isConcerning = cheatDays.length>=2;
-              const borderC = isFlexible?"#a8ff3e":isConcerning?"#ff4d4d":"#4dc8ff";
-              const bgC = isFlexible?"rgba(168,255,62,.04)":isConcerning?"rgba(255,77,77,.04)":"rgba(77,200,255,.04)";
-              return (
-                <div>
-                  <div className="sec-h">Análisis de Cheat Days</div>
-                  <div className="card" style={{borderLeft:`3px solid ${borderC}`,borderRadius:"0 4px 4px 0",background:bgC,marginBottom:20}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                      <div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:borderC,letterSpacing:".15em",marginBottom:4}}>
-                          {isFlexible?"✅ CHEAT DAY CONTROLADO":isConcerning?"⚠ MÚLTIPLES DÍAS PROBLEMÁTICOS":"📊 SIN CHEAT DAYS ESTA SEMANA"}
-                        </div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15}}>
-                          {cheatDays.length} día{cheatDays.length!==1?"s":""} de exceso · {goodDays.length} día{goodDays.length!==1?"s":""} en zona verde
-                        </div>
-                      </div>
-                      <div style={{display:"flex",gap:8}}>
-                        <div style={{textAlign:"center",background:"#1a1a22",borderRadius:3,padding:"8px 14px"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:isConcerning?"#ff4d4d":isFlexible?"#a8ff3e":"#4dc8ff",lineHeight:1}}>{Math.round((1-cheatRatio)*100)}%</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>días en meta</div>
-                        </div>
-                      </div>
-                    </div>
-                    <p style={{fontSize:12,color:"#8888a8",lineHeight:1.6,marginBottom:8}}>
-                      {isFlexible
-                        ? `Un cheat day bien administrado es parte del protocolo sostenible. Tus ${goodDays.length} días en zona verde más que compensan. El contexto calórico semanal sigue siendo favorable para la recomposición.`
-                        : isConcerning
-                        ? `${cheatDays.length} días problemáticos en 7 días impacta directamente el LDL y la HbA1c. El déficit de proteína acumulado frena la recomposición. Intenta limitar a máximo 1 día flexible por semana.`
-                        : `Semana muy consistente. Tienes margen para un cheat meal estratégico si lo necesitas — no afectará los resultados de la semana.`
-                      }
-                    </p>
-                    {cheatDays.length>0 && (
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        {cheatDays.map(d=>(
-                          <span key={d} onClick={()=>{setSelDate(d);setTab("hoy");}} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff7a4d",background:"rgba(255,122,77,.1)",borderRadius:2,padding:"2px 8px",cursor:"pointer"}}>
-                            {new Date(d+"T12:00:00").toLocaleDateString("es-CR",{weekday:"short",day:"numeric"})} →
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── HALL OF FAME & SHAME ── */}
-            {(() => {
-              const all14 = Object.entries(log)
-                .filter(([d])=>{ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14); return d>=cutoff.toISOString().split("T")[0]; })
-                .flatMap(([d,entries])=>entries.map(e=>({...e,date:d})));
-              if(all14.length<3) return null;
-              const scored = all14.map(e=>({
-                ...e,
-                _score: (e.score||5)*10
-                  + (e.grade==="A"?30:e.grade==="B"?15:e.grade==="C"?0:e.grade==="D"?-20:-35)
-                  + (e.ldl_impact==="positivo"?15:e.ldl_impact==="negativo"?-15:0)
-                  + (e.hba1c_impact==="positivo"?10:e.hba1c_impact==="negativo"?-10:0)
-              }));
-              const fame  = [...scored].sort((a,b)=>b._score-a._score).slice(0,3);
-              const shame = [...scored].sort((a,b)=>a._score-b._score).slice(0,3);
-              return (
-                <div className="g2" style={{marginBottom:20}}>
-                  <div>
-                    <div className="sec-h">🏆 Hall of Fame — 14 días</div>
-                    {fame.map((e,i)=>(
-                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #3ddc84",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#3ddc84",lineHeight:1}}>#{i+1}</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"B")}}>{e.grade||"B"}</span>
-                        </div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4,lineHeight:1.3}}>{e.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
-                          {e.meal&&<span style={{color:"#a8ff3e",marginRight:6}}>{e.meal}</span>}
-                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
-                        </div>
-                        {e.notes && <div style={{fontSize:11,color:"#3ddc84",lineHeight:1.4}}>💡 {e.notes}</div>}
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div className="sec-h">💀 Hall of Shame — 14 días</div>
-                    {shame.map((e,i)=>(
-                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #ff4d4d",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#ff4d4d",lineHeight:1}}>#{i+1}</span>
-                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"C")}}>{e.grade||"C"}</span>
-                        </div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4,lineHeight:1.3}}>{e.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
-                          {e.meal&&<span style={{color:"#ff7a4d",marginRight:6}}>{e.meal}</span>}
-                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
-                        </div>
-                        {e.alerta && <div style={{fontSize:11,color:"#ffb830",lineHeight:1.4}}>⚠️ {e.alerta}</div>}
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
 
           </div>
         )}
@@ -2289,7 +2122,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 )}
                 {dfPct7>25 && (
                   <div className="ins ir" style={{marginTop:10}}>
-                    ⚠ <strong>{dfPct7}%</strong> de las comidas esta semana fueron D/F. Revisa el Hall of Shame en PROGRESO.
+                    ⚠ <strong>{dfPct7}%</strong> de las comidas esta semana fueron D/F. Revisa el Hall of Shame en ANÁLISIS.
                   </div>
                 )}
               </div>
@@ -2605,6 +2438,115 @@ Analiza este día y responde SOLO JSON sin backticks:
             )}
 
             {/* Divider */}
+
+            {/* ── HALL OF FAME & SHAME ── */}
+            {(() => {
+              const all14 = Object.entries(log)
+                .filter(([d])=>{ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14); return d>=cutoff.toISOString().split("T")[0]; })
+                .flatMap(([d,entries])=>entries.map(e=>({...e,date:d})));
+              if(all14.length<3) return null;
+              const scored = all14.map(e=>({
+                ...e,
+                _score: (e.score||5)*10
+                  + (e.grade==="A"?30:e.grade==="B"?15:e.grade==="C"?0:e.grade==="D"?-20:-35)
+                  + (e.ldl_impact==="positivo"?15:e.ldl_impact==="negativo"?-15:0)
+                  + (e.hba1c_impact==="positivo"?10:e.hba1c_impact==="negativo"?-10:0)
+              }));
+              const fame  = [...scored].sort((a,b)=>b._score-a._score).slice(0,3);
+              const shame = [...scored].sort((a,b)=>a._score-b._score).slice(0,3);
+              return (
+                <div className="g2" style={{marginBottom:20}}>
+                  <div>
+                    <div className="sec-h">🏆 Hall of Fame — 14 días</div>
+                    {fame.map((e,i)=>(
+                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #3ddc84",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#3ddc84"}}>#{i+1}</span>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"B")}}>{e.grade||"B"}</span>
+                        </div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4}}>{e.name}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
+                          {e.meal&&<span style={{color:"#a8ff3e",marginRight:6}}>{e.meal}</span>}
+                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
+                        </div>
+                        {e.notes && <div style={{fontSize:11,color:"#3ddc84"}}>💡 {e.notes}</div>}
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="sec-h">💀 Hall of Shame — 14 días</div>
+                    {shame.map((e,i)=>(
+                      <div key={e.id||i} className="card" style={{marginBottom:8,borderLeft:"3px solid #ff4d4d",borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#ff4d4d"}}>#{i+1}</span>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(e.grade||"C")}}>{e.grade||"C"}</span>
+                        </div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:4}}>{e.name}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:3}}>
+                          {e.meal&&<span style={{color:"#ff7a4d",marginRight:6}}>{e.meal}</span>}
+                          <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span>
+                        </div>
+                        {e.alerta && <div style={{fontSize:11,color:"#ffb830"}}>⚠️ {e.alerta}</div>}
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>{e.date}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Análisis de Patrones con IA ── */}
+            <div className="sec-h">Análisis de Patrones Nutricionales</div>
+            <div style={{marginBottom:20}}>
+              <button className="btn" style={{width:"100%",marginBottom:10}} onClick={generateWeekInsights} disabled={weekInsightsLoading}>
+                {weekInsightsLoading?<span>ANALIZANDO <span className="dots"><span/><span/><span/></span></span>:"🧠 ANALIZAR PATRONES (14 días)"}
+              </button>
+              {weekInsights && !weekInsights.error && (
+                <div className="fade-in">
+                  <div className="card" style={{borderLeft:"3px solid #a8ff3e",borderRadius:"0 4px 4px 0",marginBottom:10}}>
+                    <div className="lbl" style={{marginBottom:8}}>Resumen de Patrones</div>
+                    <p style={{fontSize:13,color:"#8888a8",lineHeight:1.6}}>{weekInsights.weekly_summary}</p>
+                    <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+                      {weekInsights.grade_avg && <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:gradeColor(weekInsights.grade_avg)}}>{weekInsights.grade_avg}</span>}
+                      {weekInsights.ldl_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.ldl_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>LDL {impactArrow(weekInsights.ldl_score)} {weekInsights.ldl_score}</span>}
+                      {weekInsights.hba1c_score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:impactColor(weekInsights.hba1c_score),background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>HbA1c {impactArrow(weekInsights.hba1c_score)} {weekInsights.hba1c_score}</span>}
+                      {weekInsights.protein_compliance && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#4dc8ff",background:"#1a1a22",borderRadius:2,padding:"3px 8px"}}>Proteína: {weekInsights.protein_compliance}</span>}
+                    </div>
+                  </div>
+                  {weekInsights.pattern_alerts?.length>0 && (
+                    <div className="ins ir" style={{marginBottom:8}}>
+                      <strong>⚠ Patrones a corregir</strong>
+                      {weekInsights.pattern_alerts.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}
+                    </div>
+                  )}
+                  {weekInsights.pattern_wins?.length>0 && (
+                    <div className="ins ig" style={{marginBottom:8}}>
+                      <strong>✅ Hábitos positivos detectados</strong>
+                      {weekInsights.pattern_wins.map((w,i)=><div key={i} style={{marginTop:4}}>• {w}</div>)}
+                    </div>
+                  )}
+                  {(weekInsights.top_foods?.length>0||weekInsights.avoid_foods?.length>0) && (
+                    <div className="g2">
+                      {weekInsights.top_foods?.length>0 && (
+                        <div className="card" style={{borderTop:"2px solid #3ddc84"}}>
+                          <div className="lbl" style={{marginBottom:8}}>🏆 Mejores opciones</div>
+                          {weekInsights.top_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#3ddc84",marginTop:4}}>✓ {f}</div>)}
+                        </div>
+                      )}
+                      {weekInsights.avoid_foods?.length>0 && (
+                        <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
+                          <div className="lbl" style={{marginBottom:8}}>⚠ Reducir / eliminar</div>
+                          {weekInsights.avoid_foods.map((f,i)=><div key={i} style={{fontSize:12,color:"#ff7a4d",marginTop:4}}>✗ {f}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {weekInsights?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{weekInsights.error}</div>}
+            </div>
+
             <div style={{borderTop:"1px solid #2a2a38",margin:"24px 0"}}/>
 
             {/* Static section — always visible */}
