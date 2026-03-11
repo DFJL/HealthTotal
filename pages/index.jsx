@@ -900,44 +900,52 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               ));
             })()}
-            </div>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{showNotifs?"▲":"▼"}</span>
           </div>
-          {showNotifs && (
-            <div style={{padding:"0 44px 14px",display:"flex",flexDirection:"column",gap:8}} className="fade-in">
-              {notifications.map(n=>(
-                <div key={n.id} style={{
-                  display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,
-                  background:n.type==="success"?"rgba(61,220,132,.04)":n.type==="alert"?"rgba(255,77,77,.04)":"rgba(255,184,48,.04)",
-                  border:`1px solid ${n.type==="success"?"rgba(61,220,132,.2)":n.type==="alert"?"rgba(255,77,77,.15)":"rgba(255,184,48,.15)"}`,
-                  borderRadius:3,padding:"10px 14px",
-                }}>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                      <span style={{fontSize:14}}>{n.icon}</span>
-                      <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,
-                        color:n.type==="success"?"#3ddc84":n.type==="alert"?"#ff4d4d":"#ffb830"
-                      }}>{n.icon} {n.type==="success"?"Racha positiva":n.type==="info"?"Recordatorio":"Alerta"}</span>
-                    </div>
-                    <p style={{fontSize:11,color:"#8888a8",lineHeight:1.5,margin:0}}>{n.msg}</p>
-                  </div>
-                  <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center",marginTop:2}}>
-                    {n.action && (
-                      <button className="btn-sm" style={{fontSize:"8px",padding:"3px 8px"}}
-                        onClick={()=>{setTab(n.tab);setShowNotifs(false);}}>
-                        {n.action}
-                      </button>
-                    )}
-                    <button
-                      style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14,lineHeight:1,padding:"2px 4px"}}
-                      onClick={()=>dismissNotif(n.id)}>×</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      )}
+        {notifications.length > 0 && (
+          <div style={{borderTop:"1px solid #1e1e2a",width:"100%"}}>
+            <div style={{padding:"10px 44px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}
+              onClick={()=>setShowNotifs(v=>!v)}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".15em",color:"#ffb830"}}>
+                🔔 {notifications.length} AVISO{notifications.length>1?"S":""} INTELIGENTE{notifications.length>1?"S":""}
+              </span>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{showNotifs?"▲":"▼"}</span>
+            </div>
+            {showNotifs && (
+              <div style={{padding:"0 44px 14px",display:"flex",flexDirection:"column",gap:8}} className="fade-in">
+                {notifications.map(n=>(
+                  <div key={n.id} style={{
+                    display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,
+                    background:n.type==="success"?"rgba(61,220,132,.04)":n.type==="alert"?"rgba(255,77,77,.04)":"rgba(255,184,48,.04)",
+                    border:`1px solid ${n.type==="success"?"rgba(61,220,132,.2)":n.type==="alert"?"rgba(255,77,77,.15)":"rgba(255,184,48,.15)"}`,
+                    borderRadius:3,padding:"10px 14px",
+                  }}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                        <span style={{fontSize:14}}>{n.icon}</span>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,
+                          color:n.type==="success"?"#3ddc84":n.type==="alert"?"#ff4d4d":"#ffb830"
+                        }}>{n.type==="success"?"Racha positiva":n.type==="info"?"Recordatorio":"Alerta"}</span>
+                      </div>
+                      <p style={{fontSize:11,color:"#8888a8",lineHeight:1.5,margin:0}}>{n.msg}</p>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center",marginTop:2}}>
+                      {n.action && (
+                        <button className="btn-sm" style={{fontSize:"8px",padding:"3px 8px"}}
+                          onClick={()=>{setTab(n.tab);setShowNotifs(false);}}>
+                          {n.action}
+                        </button>
+                      )}
+                      <button style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14,lineHeight:1,padding:"2px 4px"}}
+                        onClick={()=>dismissNotif(n.id)}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── MODULE NAV (top) ── */}
       <div style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#0c0c0f",position:"sticky",top:0,zIndex:50,overflowX:"auto",scrollbarWidth:"none"}}>
