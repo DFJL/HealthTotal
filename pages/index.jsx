@@ -347,13 +347,13 @@ function AppInner() {
   const [routineInput, setRoutineInput] = useState("");
   const [routineLoading, setRoutineLoading] = useState(false);
   const [generatedRoutine, setGeneratedRoutine] = useState(null);
-  const [aiAnalysis, setAiAnalysis] = useState(null);
-  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const [aiHabits, setAiHabits] = useState(null);
   const [aiHabitsLoading, setAiHabitsLoading] = useState(false);
+  const [aiHabitsTs, setAiHabitsTs] = useState(null);
   // AI week insights
   const [weekInsights, setWeekInsights] = useState(null);
   const [weekInsightsLoading, setWeekInsightsLoading] = useState(false);
+  const [weekInsightsTs, setWeekInsightsTs] = useState(null);
   const [dayInsight, setDayInsight] = useState({});
   const [dayInsightLoading, setDayInsightLoading] = useState(false);
   // Body photos
@@ -406,6 +406,10 @@ function AppInner() {
         ]);
         if (rPhotos?.value)    setBodyPhotos(JSON.parse(rPhotos.value));
         if (rDismissed?.value) setDismissedNotifs(JSON.parse(rDismissed.value));
+        // Load AI insight caches
+        const [rWI, rAH] = await Promise.all([storageGet("v8_cache_weekinsights"), storageGet("v8_cache_aihabits")]);
+        if (rWI?.value) { const c=JSON.parse(rWI.value); setWeekInsights(c.data); setWeekInsightsTs(c.ts); }
+        if (rAH?.value) { const c=JSON.parse(rAH.value); setAiHabits(c.data); setAiHabitsTs(c.ts); }
       } catch(e) { console.error(e); }
       finally { setLoaded(true); }
     })();
@@ -608,49 +612,6 @@ Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 8 pal
     setRoutineLoading(false);
   };
 
-  // ── AI Análisis Clínico Adaptativo ──
-  const generateAiAnalysis = async () => {
-    const allEntries = Object.entries(log).flatMap(([d,entries])=>entries.map(e=>({...e,date:d}))).slice(-30);
-    if (allEntries.length < 3) { setAiAnalysis({error:"Necesitas al menos 3 comidas registradas."}); return; }
-    setAiAnalysisLoading(true); setAiAnalysis(null);
-    try {
-      const summary = allEntries.map(e=>`${e.date} ${e.meal||""}: ${e.name} | ${e.calories}kcal P:${e.protein}g C:${e.carbs}g F:${e.fats}g Grade:${e.grade||"?"} LDL:${e.ldl_impact||"?"} HbA1c:${e.hba1c_impact||"?"} Score:${e.score||"?"}`).join("\n");
-      const latestInbody = "Feb 2026: 82.8kg, 38.5kg músculo, 19.0% grasa, WHR 0.93";
-      const latestLabs = "Feb 2026: LDL 124.4 (meta<100), HDL 61, TC 208, TG 113, HbA1c 5.90% (meta<5.7%), Glucosa 97";
-      const res = await fetch("/api/analyze",{
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:`
-Eres un nutricionista clínico analizando los datos reales de Felipe Jiménez (39 años, recomposición corporal).
-LABS ACTUALES: ${latestLabs}
-INBODY ACTUAL: ${latestInbody}
-SUPLEMENTOS: Rosuvastatina, Creatina 5g, Omega-3, Vitamina C, D3, Zinc, Magnesio
-
-LOG ALIMENTARIO RECIENTE (${allEntries.length} comidas):
-${summary}
-
-Analiza los PATRONES REALES del log y su impacto en los marcadores clínicos de Felipe.
-Responde SOLO JSON válido sin backticks:
-{
-  "semaforo": "verde|amarillo|rojo",
-  "titulo_estado": "frase corta del estado nutricional actual (max 10 palabras)",
-  "resumen_ejecutivo": "2-3 oraciones sobre el patrón nutricional real observado",
-  "alertas": [{"icono":"emoji","titulo":"título alerta","descripcion":"qué está pasando y por qué importa para LDL/HbA1c","severidad":"alta|media|baja"}],
-  "logros": [{"icono":"emoji","titulo":"título logro","descripcion":"qué está funcionando bien y su impacto clínico"}],
-  "correlacion_ldl": "análisis de cómo la dieta reciente afecta el LDL",
-  "correlacion_hba1c": "análisis de cómo la dieta reciente afecta la HbA1c",
-  "top_alimentos": ["mejor alimento 1 con razón breve","mejor alimento 2 con razón breve"],
-  "alimentos_problema": ["alimento problemático 1 con razón breve","alimento problemático 2 con razón breve"],
-  "proteina_compliance": "porcentaje estimado de días que se cumplió meta de proteína (165g)",
-  "proximos_pasos": ["acción concreta 1","acción concreta 2","acción concreta 3"],
-  "mensaje_motivacional": "mensaje personalizado de 1 oración basado en el progreso real"
-}`}]})
-      });
-      const data = await res.json();
-      const txt = data.content?.map(i=>i.text||"").join("")||"";
-      setAiAnalysis(extractJSON(txt));
-    } catch(e) { setAiAnalysis({error:`Error: ${e.message}`}); }
-    setAiAnalysisLoading(false);
-  };
 
   // ── AI Hábitos Adaptativos ──
   const generateAiHabits = async () => {
@@ -671,7 +632,11 @@ Máximo 5 hábitos. Descripción máximo 20 palabras cada una.`}]})
       });
       const data = await res.json();
       const txt = data.content?.map(i=>i.text||"").join("")||"";
-      setAiHabits(extractJSON(txt));
+      const ahData = extractJSON(txt);
+      setAiHabits(ahData);
+      const ahTs = Date.now();
+      setAiHabitsTs(ahTs);
+      await storageSet("v8_cache_aihabits", JSON.stringify({ts:ahTs, data:ahData}));
     } catch(e) { setAiHabits({error:`Error: ${e.message}`}); }
     setAiHabitsLoading(false);
   };
@@ -696,7 +661,11 @@ Responde SOLO JSON sin backticks:
       });
       const data = await res.json();
       const txt = data.content?.map(i=>i.text||"").join("")||"";
-      setWeekInsights(extractJSON(txt));
+      const wiData = extractJSON(txt);
+      setWeekInsights(wiData);
+      const wiTs = Date.now();
+      setWeekInsightsTs(wiTs);
+      await storageSet("v8_cache_weekinsights", JSON.stringify({ts:wiTs, data:wiData}));
     } catch(e) {
       setWeekInsights({error:"Error al generar insights. Intenta de nuevo."});
     }
@@ -832,6 +801,16 @@ Analiza este día y responde SOLO JSON sin backticks:
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
   ];
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
+
+
+  const fmtCacheAge = ts => {
+    if (!ts) return null;
+    const mins = Math.round((Date.now()-ts)/60000);
+    if (mins < 60) return `hace ${mins} min`;
+    const hrs = Math.round(mins/60);
+    return `hace ${hrs}h`;
+  };
+  const isCacheExpired = ts => !ts || (Date.now()-ts) > 24*60*60*1000;
 
   if (!loaded) return (
     <div style={{background:"#0c0c0f",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -2250,10 +2229,15 @@ Analiza este día y responde SOLO JSON sin backticks:
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div className="sec-h" style={{margin:0}}>Hábitos — Adaptativo con IA</div>
-              <button className="btn-sm" onClick={generateAiHabits} disabled={aiHabitsLoading}
-                style={{background:"#a8ff3e",color:"#080810",border:"none"}}>
-                {aiHabitsLoading ? <span>Analizando<span className="dots"><span/><span/><span/></span></span> : "⚡ ACTUALIZAR"}
-              </button>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button className="btn-sm" onClick={generateAiHabits}
+                  disabled={aiHabitsLoading||(!!aiHabits&&!aiHabits.error&&!isCacheExpired(aiHabitsTs))}
+                  style={{background:"#a8ff3e",color:"#080810",border:"none"}}>
+                  {aiHabitsLoading?<span>Analizando<span className="dots"><span/><span/><span/></span></span>:isCacheExpired(aiHabitsTs)||!aiHabits?"⚡ ACTUALIZAR":"✓ LISTO"}
+                </button>
+                {aiHabitsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{fmtCacheAge(aiHabitsTs)}</span>}
+                {aiHabits&&!aiHabitsLoading&&<button className="btn-sm" onClick={()=>{setAiHabits(null);setAiHabitsTs(null);storageSet("v8_cache_aihabits","");}} style={{fontSize:"8px",background:"#1a1a22",color:"#8888a8",border:"1px solid #2a2a38"}}>↻</button>}
+              </div>
             </div>
             {/* AI Habits */}
             {aiHabits?.error && <div className="ins ir"><strong>Error</strong>{aiHabits.error}</div>}
@@ -2327,129 +2311,6 @@ Analiza este día y responde SOLO JSON sin backticks:
         {tab==="analisis" && (
           <div>
             {/* AI Analysis CTA */}
-            <div className="card" style={{marginBottom:20,borderTop:"2px solid #a8ff3e",background:"linear-gradient(135deg,#0e1a0e,#131318)"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                <div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,marginBottom:4}}>Análisis Clínico con IA</div>
-                  <div style={{fontSize:12,color:"#8888a8",lineHeight:1.5}}>La IA lee tu log real y genera insights personalizados sobre LDL, HbA1c y recomposición corporal.</div>
-                </div>
-                <button className="btn" onClick={generateAiAnalysis} disabled={aiAnalysisLoading}
-                  style={{flexShrink:0,marginLeft:14,background:"#a8ff3e",color:"#080810",border:"none",minWidth:100}}>
-                  {aiAnalysisLoading ? <span>Analizando<span className="dots"><span/><span/><span/></span></span> : "🔬 ANALIZAR"}
-                </button>
-              </div>
-            </div>
-
-            {/* AI Results */}
-            {aiAnalysis?.error && <div className="ins ir" style={{marginBottom:16}}><strong>Error</strong>{aiAnalysis.error}</div>}
-            {aiAnalysis && !aiAnalysis.error && (
-              <div className="fade-in">
-                {/* Semáforo + resumen */}
-                {(() => {
-                  const sColor = aiAnalysis.semaforo==="verde"?"#3ddc84":aiAnalysis.semaforo==="rojo"?"#ff4d4d":"#ffb830";
-                  return (
-                    <div className="card" style={{marginBottom:16,borderTop:`3px solid ${sColor}`}}>
-                      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-                        <div style={{fontSize:28}}>{aiAnalysis.semaforo==="verde"?"🟢":aiAnalysis.semaforo==="rojo"?"🔴":"🟡"}</div>
-                        <div>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:sColor}}>{aiAnalysis.titulo_estado}</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".1em",textTransform:"uppercase"}}>{aiAnalysis.semaforo}</div>
-                        </div>
-                      </div>
-                      <div style={{fontSize:13,color:"#8888a8",lineHeight:1.6}}>{aiAnalysis.resumen_ejecutivo}</div>
-                      {aiAnalysis.mensaje_motivacional && <div style={{marginTop:10,fontSize:12,color:"#a8ff3e",fontStyle:"italic"}}>"{aiAnalysis.mensaje_motivacional}"</div>}
-                    </div>
-                  );
-                })()}
-
-                {/* Alertas IA */}
-                {aiAnalysis.alertas?.length > 0 && (
-                  <>
-                    <div className="sec-h">Alertas Detectadas</div>
-                    {aiAnalysis.alertas.map((a,i) => {
-                      const sc = a.severidad==="alta"?"r":a.severidad==="media"?"y":"b";
-                      return (
-                        <div key={i} className={`ins i${sc}`}>
-                          <strong>{a.icono} {a.titulo}</strong>
-                          {a.descripcion}
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-
-                {/* Logros IA */}
-                {aiAnalysis.logros?.length > 0 && (
-                  <>
-                    <div className="sec-h">Logros Identificados</div>
-                    {aiAnalysis.logros.map((l,i) => (
-                      <div key={i} className="ins ig">
-                        <strong>{l.icono} {l.titulo}</strong>
-                        {l.descripcion}
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {/* Correlaciones */}
-                {(aiAnalysis.correlacion_ldl || aiAnalysis.correlacion_hba1c) && (
-                  <>
-                    <div className="sec-h">Correlación Dieta → Marcadores</div>
-                    <div className="card" style={{marginBottom:16}}>
-                      {aiAnalysis.correlacion_ldl && (
-                        <div style={{marginBottom:12,paddingBottom:12,borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff4d4d",letterSpacing:".15em",marginBottom:6}}>LDL — IMPACTO DIETA</div>
-                          <div style={{fontSize:13,color:"#8888a8",lineHeight:1.5}}>{aiAnalysis.correlacion_ldl}</div>
-                        </div>
-                      )}
-                      {aiAnalysis.correlacion_hba1c && (
-                        <div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ffb830",letterSpacing:".15em",marginBottom:6}}>HBA1C — IMPACTO DIETA</div>
-                          <div style={{fontSize:13,color:"#8888a8",lineHeight:1.5}}>{aiAnalysis.correlacion_hba1c}</div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Top/Avoid foods */}
-                {(aiAnalysis.top_alimentos || aiAnalysis.alimentos_problema) && (
-                  <div className="g2" style={{marginBottom:16}}>
-                    {aiAnalysis.top_alimentos?.length > 0 && (
-                      <div className="card" style={{borderTop:"2px solid #3ddc84"}}>
-                        <div className="lbl" style={{marginBottom:10,color:"#3ddc84"}}>✅ Mejores Alimentos</div>
-                        {aiAnalysis.top_alimentos.map((f,i)=>(
-                          <div key={i} style={{fontSize:12,color:"#8888a8",padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.3)"}}>{f}</div>
-                        ))}
-                      </div>
-                    )}
-                    {aiAnalysis.alimentos_problema?.length > 0 && (
-                      <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
-                        <div className="lbl" style={{marginBottom:10,color:"#ff4d4d"}}>⚠️ Alimentos Problema</div>
-                        {aiAnalysis.alimentos_problema.map((f,i)=>(
-                          <div key={i} style={{fontSize:12,color:"#8888a8",padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.3)"}}>{f}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Próximos pasos */}
-                {aiAnalysis.proximos_pasos?.length > 0 && (
-                  <>
-                    <div className="sec-h">Próximos Pasos</div>
-                    <div className="card" style={{marginBottom:16}}>
-                      {aiAnalysis.proximos_pasos.map((p,i)=>(
-                        <div key={i} style={{display:"flex",gap:12,padding:"9px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                          <span style={{color:"#a8ff3e",fontFamily:"'JetBrains Mono',monospace",fontSize:12,flexShrink:0}}>{i+1}.</span>
-                          <span style={{fontSize:13,color:"#8888a8",lineHeight:1.5}}>{p}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
 
             {/* Divider */}
 
@@ -2513,9 +2374,13 @@ Analiza este día y responde SOLO JSON sin backticks:
             {/* ── Análisis de Patrones con IA ── */}
             <div className="sec-h">Análisis de Patrones Nutricionales</div>
             <div style={{marginBottom:20}}>
-              <button className="btn" style={{width:"100%",marginBottom:10}} onClick={generateWeekInsights} disabled={weekInsightsLoading}>
-                {weekInsightsLoading?<span>ANALIZANDO <span className="dots"><span/><span/><span/></span></span>:"🧠 ANALIZAR PATRONES (14 días)"}
-              </button>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <button className="btn" style={{flex:1}} onClick={generateWeekInsights} disabled={weekInsightsLoading||(!isCacheExpired(weekInsightsTs)&&!!weekInsights&&!weekInsights.error)}>
+                  {weekInsightsLoading?<span>ANALIZANDO <span className="dots"><span/><span/><span/></span></span>:isCacheExpired(weekInsightsTs)||!weekInsights?"🧠 ANALIZAR PATRONES (14 días)":"✓ ANALIZADO"}
+                </button>
+                {weekInsightsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",whiteSpace:"nowrap"}}>{fmtCacheAge(weekInsightsTs)}</span>}
+                {weekInsights && !weekInsightsLoading && <button className="btn-sm" onClick={()=>{setWeekInsights(null);setWeekInsightsTs(null);storageSet("v8_cache_weekinsights","");}} style={{flexShrink:0,fontSize:"8px"}}>↻</button>}
+              </div>
               {weekInsights && !weekInsights.error && (
                 <div className="fade-in">
                   <div className="card" style={{borderLeft:"3px solid #a8ff3e",borderRadius:"0 4px 4px 0",marginBottom:10}}>
