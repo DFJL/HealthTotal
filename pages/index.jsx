@@ -890,6 +890,8 @@ function AppInner() {
   const [inbodyLoading, setInbodyLoading] = useState(false);
   const [inbodyResult, setInbodyResult]   = useState(null);
   const [inbodyB64, setInbodyB64] = useState(null);
+  const [showManualInbody, setShowManualInbody] = useState(false);
+  const [manualInbody, setManualInbody] = useState({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
   const [customInbody, setCustomInbody] = useState([]);
   const [bodyMeasurements, setBodyMeasurements] = useState([]);
   const [labResults, setLabResults] = useState([]);
@@ -897,6 +899,8 @@ function AppInner() {
   const [labsLoading, setLabsLoading] = useState(false);
   const [labsResult, setLabsResult]   = useState(null);
   const [labsB64, setLabsB64] = useState(null);
+  const [showManualLabs, setShowManualLabs] = useState(false);
+  const [manualLabs, setManualLabs] = useState({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:""});
   const [customLabs, setCustomLabs] = useState([]);
   const [userProfile, setUserProfile] = useState(USER_PROFILE_DEFAULT);
   // AI Routine generator
@@ -1238,6 +1242,41 @@ function AppInner() {
     saveCustomInbody([...customInbody, entry], entry);
     setInbodyResult(null); setInbodyB64(null);
     alert("✓ Medición InBody agregada al historial");
+  };
+
+  const saveManualInbody = () => {
+    const {date,weight,muscle,fat_pct,visceral,waist,inbody_score,note} = manualInbody;
+    if (!date || !weight) { alert("Fecha y Peso son obligatorios"); return; }
+    const wNum = parseFloat(weight), mNum = parseFloat(muscle)||null, fNum = parseFloat(fat_pct)||null;
+    const viNum = parseFloat(visceral)||null, cNum = parseFloat(waist)||null, sNum = parseFloat(inbody_score)||null;
+    const whrCalc = (cNum && wNum) ? parseFloat((cNum / 170).toFixed(2)) : null; // approx height
+    const entry = { d:date, w:wNum, m:mNum, f:fNum, vi:viNum, s:sNum, whr:whrCalc, waist:cNum, note:note||"Manual ◀" };
+    saveCustomInbody([...customInbody, entry], entry);
+    setManualInbody({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
+    setShowManualInbody(false);
+    alert("✓ Medición manual guardada en historial");
+  };
+
+  const saveManualLabs = async () => {
+    const {date, ...rest} = manualLabs;
+    if (!date) { alert("La fecha es obligatoria"); return; }
+    const toNum = v => v==="" ? null : parseFloat(v);
+    const entry = {
+      date, user_id: user?.id,
+      ldl:toNum(rest.ldl), hdl:toNum(rest.hdl), tc:toNum(rest.tc), tg:toNum(rest.tg),
+      hba1c:toNum(rest.hba1c), glucose:toNum(rest.glucose), insulin:toNum(rest.insulin),
+      psa:toNum(rest.psa), creatinina:toNum(rest.creatinina), ggt:toNum(rest.ggt),
+      acido_urico:toNum(rest.acido_urico), vcm:toNum(rest.vcm), hcm:toNum(rest.hcm),
+      hb:toNum(rest.hb), leucocitos:toNum(rest.leucocitos),
+      summary:"Ingreso manual"
+    };
+    try {
+      await insertLabResult(user.id, entry);
+      setLabResults(prev=>[...prev,entry].sort((a,b)=>a.date.localeCompare(b.date)));
+      setManualLabs({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:""});
+      setShowManualLabs(false);
+      alert("✓ Resultado de laboratorio guardado");
+    } catch(e) { alert("Error al guardar: "+e.message); }
   };
 
   // ── Parse Labs image/PDF with AI ──
@@ -2429,6 +2468,38 @@ Analiza este día y responde SOLO JSON sin backticks:
                   )}
                 </div>
               </div>
+              {/* Manual InBody entry button */}
+              <button className="btn-sm" style={{marginBottom:10,fontSize:"9px",background:"#1a1a22",border:"1px solid #2a2a38",color:"#8888a8"}}
+                onClick={()=>setShowManualInbody(v=>!v)}>
+                ✏️ {showManualInbody?"CANCELAR":"INGRESAR DATOS MANUALMENTE"}
+              </button>
+              {showManualInbody && (
+                <div className="card fade-in" style={{marginBottom:12,border:"1px solid #2a2a38"}}>
+                  <div className="lbl" style={{marginBottom:10}}>📝 ENTRADA MANUAL — PESO / INBODY</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                    {[
+                      ["date","Fecha (YYYY-MM'DD o YYYY-MM)","text",true],
+                      ["weight","Peso (kg)","number",true],
+                      ["muscle","Masa muscular (kg)","number",false],
+                      ["fat_pct","% Grasa","number",false],
+                      ["visceral","Grasa visceral (nivel)","number",false],
+                      ["waist","Cintura (cm)","number",false],
+                      ["inbody_score","Score InBody (0-100)","number",false],
+                    ].map(([k,placeholder,type,req])=>(
+                      <input key={k} type={type} placeholder={placeholder+(req?" *":"")}
+                        value={manualInbody[k]} onChange={e=>setManualInbody(p=>({...p,[k]:e.target.value}))}
+                        className="inp" style={{fontSize:11}}/>
+                    ))}
+                    <input placeholder="Nota (ej: Báscula casa, gym...)" value={manualInbody.note}
+                      onChange={e=>setManualInbody(p=>({...p,note:e.target.value}))}
+                      className="inp" style={{fontSize:11,gridColumn:"1/-1"}}/>
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:8}}>
+                    * Solo Fecha y Peso son obligatorios. El resto es opcional.
+                  </div>
+                  <button className="btn" style={{width:"100%"}} onClick={saveManualInbody}>✓ GUARDAR MEDICIÓN</button>
+                </div>
+              )}
               {/* InBody result */}
               {inbodyResult?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11,marginBottom:10}}>{inbodyResult.error}</div>}
               {inbodyResult && !inbodyResult.error && (
@@ -2555,7 +2626,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 const firstM = allInbody[0]?.m;
                 const bestF = allInbody.reduce((mn,x)=>x.f<mn?x.f:mn, 100);
                 const bestFDate = allInbody.find(x=>x.f===bestF)?.d||"";
-                const tmb = Math.round(10*lastInbody.w + 6.25*175 - 5*39 + 5);
+                const tmb = lastInbody.m ? Math.round(370 + 21.6*lastInbody.m) : Math.round(10*lastInbody.w + 6.25*175 - 5*39 + 5);
                 return [
                   {l:"Peso",v:lastInbody.w,u:"kg",d:peakW>lastInbody.w?`Peak ${peakW} kg (${peakWDate})`:"Peso mínimo actual",sub:`Objetivo: ${targets.weightGoal||80} kg`,c:"#a8ff3e"},
                   {l:"Masa Muscular",v:lastInbody.m??'—',u:"kg",d:firstM?`+${(lastInbody.m-firstM).toFixed(1)} kg vs ${allInbody[0].d}`:"Primera medición",sub:`Objetivo: ≥${targets.muscleGoal||39} kg`,c:"#3ddc84"},
@@ -2642,6 +2713,35 @@ Analiza este día y responde SOLO JSON sin backticks:
                     {labsLoading?<span>LEYENDO LABS <span className="dots"><span/><span/><span/></span></span>:"🔍 LEER CON IA"}
                   </button>
                   <button className="btn-sm" onClick={()=>{setLabsB64(null);setLabsResult(null);}}>✕</button>
+                </div>
+              )}
+              {/* Manual Labs entry */}
+              <button className="btn-sm" style={{marginTop:10,marginBottom:4,fontSize:"9px",background:"#1a1a22",border:"1px solid #2a2a38",color:"#8888a8"}}
+                onClick={()=>setShowManualLabs(v=>!v)}>
+                ✏️ {showManualLabs?"CANCELAR":"INGRESAR DATOS MANUALMENTE"}
+              </button>
+              {showManualLabs && (
+                <div className="card fade-in" style={{marginBottom:12,border:"1px solid #2a2a38"}}>
+                  <div className="lbl" style={{marginBottom:10}}>📝 ENTRADA MANUAL — LABORATORIOS</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                    <input type="text" placeholder="Fecha (YYYY-MM) *" value={manualLabs.date}
+                      onChange={e=>setManualLabs(p=>({...p,date:e.target.value}))} className="inp" style={{fontSize:11,gridColumn:"1/-1"}}/>
+                    {[
+                      ["ldl","LDL (mg/dL)"],["hdl","HDL (mg/dL)"],["tc","Col. Total (mg/dL)"],["tg","Triglicéridos (mg/dL)"],
+                      ["hba1c","HbA1c (%)"],["glucose","Glucosa (mg/dL)"],["insulin","Insulina (μUI/mL)"],
+                      ["psa","PSA (ng/mL)"],["creatinina","Creatinina (mg/dL)"],["ggt","GGT (U/L)"],
+                      ["acido_urico","Ácido Úrico (mg/dL)"],["hb","Hemoglobina (g/dL)"],
+                      ["vcm","VCM (fL)"],["hcm","HCM (pg)"],["leucocitos","Leucocitos (mil/μL)"],
+                    ].map(([k,placeholder])=>(
+                      <input key={k} type="number" step="0.01" placeholder={placeholder}
+                        value={manualLabs[k]} onChange={e=>setManualLabs(p=>({...p,[k]:e.target.value}))}
+                        className="inp" style={{fontSize:11}}/>
+                    ))}
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:8}}>
+                    * Solo ingresa los valores que tengas disponibles. Fecha obligatoria.
+                  </div>
+                  <button className="btn" style={{width:"100%"}} onClick={saveManualLabs}>✓ GUARDAR RESULTADOS</button>
                 </div>
               )}
               {labsResult?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11,marginTop:8}}>{labsResult.error}</div>}
