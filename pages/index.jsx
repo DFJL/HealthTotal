@@ -298,6 +298,23 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 .prog-bar-f{height:100%;border-radius:2px;}
 @media(max-width:800px){.g4{grid-template-columns:1fr 1fr;}.g7{grid-template-columns:repeat(4,1fr);}}
 @media(max-width:520px){.g3,.g2{grid-template-columns:1fr;}.g7{grid-template-columns:1fr 1fr;}}
+@media(max-width:640px){
+  .desktop-module-nav{display:none!important;}
+  .mobile-bottom-nav{display:flex!important;}
+  .app-header{padding:16px 16px 14px!important;}
+  .notif-pad{padding:8px 16px!important;}
+  .notif-inner{padding:0 16px 12px!important;}
+  .score-strip{padding:8px 0!important;}
+  .score-strip-badge{padding:8px 14px!important;}
+  .score-strip-ind{padding:8px 12px!important;}
+  .tab-content{padding:16px 14px 90px!important;}
+  .sub-tabs{padding:0 4px!important;}
+}
+@media(min-width:641px){
+  .mobile-bottom-nav{display:none!important;}
+  .desktop-module-nav{display:flex!important;}
+}
+.app-header{padding:32px 44px 26px;border-bottom:1px solid #2a2a38;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;background:#131318;position:relative;overflow:hidden;}
 `;
 
 
@@ -846,7 +863,7 @@ function AppInner() {
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("hoy");
   const [targets, setTargets] = useState(TARGETS_DEF);
-  const [log, setLog]     = useState(INITIAL_LOG);
+  const [log, setLog]     = useState({});
   const [favs, setFavs]   = useState(INITIAL_FAVS);
   const [loaded, setLoaded] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -985,12 +1002,7 @@ function AppInner() {
         if (Object.keys(logData).length > 0) {
           setLog(logData);
         } else {
-          setLog(INITIAL_LOG);
-          for (const [date, entries] of Object.entries(INITIAL_LOG)) {
-            for (const entry of entries) {
-              await upsertFoodEntry(user.id, date, entry).catch(() => {});
-            }
-          }
+          setLog({}); // new user starts with empty log — never seed INITIAL_LOG
         }
         if (favsData.length > 0) setFavs(favsData);
         if (photos.length > 0)   setBodyPhotos(photos);
@@ -1604,7 +1616,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       <style>{CSS}</style>
 
       {/* ── HEADER ── */}
-      <div style={{padding:"32px 44px 26px",borderBottom:"1px solid #2a2a38",display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:16,flexWrap:"wrap",background:"#131318",position:"relative",overflow:"hidden"}}>
+      <div className="app-header">
         <div style={{position:"absolute",top:"-80px",right:"-60px",width:"420px",height:"420px",background:"radial-gradient(circle,rgba(168,255,62,.05),transparent 65%)",pointerEvents:"none"}}/>
         <div>
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>
@@ -1645,7 +1657,7 @@ Analiza este día y responde SOLO JSON sin backticks:
         </button>
         {notifications.length > 0 && (
           <div style={{borderTop:"1px solid #1e1e2a",width:"100%"}}>
-            <div style={{padding:"10px 44px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}
+            <div className="notif-pad" style={{padding:"10px 44px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}
               onClick={()=>setShowNotifs(v=>!v)}>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".15em",color:"#ffb830"}}>
                 🔔 {notifications.length} AVISO{notifications.length>1?"S":""} INTELIGENTE{notifications.length>1?"S":""}
@@ -1653,7 +1665,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{showNotifs?"▲":"▼"}</span>
             </div>
             {showNotifs && (
-              <div style={{padding:"0 44px 14px",display:"flex",flexDirection:"column",gap:8}} className="fade-in">
+              <div className="notif-inner fade-in" style={{padding:"0 44px 14px",display:"flex",flexDirection:"column",gap:8}}>
                 {notifications.map(n=>(
                   <div key={n.id} style={{
                     display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,
@@ -1745,8 +1757,8 @@ Analiza este día y responde SOLO JSON sin backticks:
         );
       })()}
 
-      {/* ── MODULE NAV (top) ── */}
-      <div style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#0c0c0f",position:"sticky",top:0,zIndex:50,overflowX:"auto",scrollbarWidth:"none"}}>
+      {/* ── MODULE NAV (top / desktop) ── */}
+      <div className="desktop-module-nav" style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#0c0c0f",position:"sticky",top:0,zIndex:50,overflowX:"auto",scrollbarWidth:"none"}}>
         {MODULES.map(m=>(
           <button key={m.id} onClick={()=>setTab(m.tabs[0][0])} style={{
             padding:"11px 20px",fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".18em",
@@ -1783,8 +1795,8 @@ Analiza este día y responde SOLO JSON sin backticks:
             )}
             {m.id==="cuerpo" && (
               <div style={{display:"flex",gap:5,marginTop:1}}>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#a8ff3e",background:"rgba(168,255,62,.08)",borderRadius:2,padding:"1px 5px"}}>82.8 kg</span>
-                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ff7a4d",background:"rgba(255,122,77,.08)",borderRadius:2,padding:"1px 5px"}}>19.0%</span>
+                {lastInbody && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#a8ff3e",background:"rgba(168,255,62,.08)",borderRadius:2,padding:"1px 5px"}}>{lastInbody.w} kg</span>}
+                {lastInbody && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ff7a4d",background:"rgba(255,122,77,.08)",borderRadius:2,padding:"1px 5px"}}>{lastInbody.f}%</span>}
               </div>
             )}
             {m.id==="entrena" && (
@@ -1802,7 +1814,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       </div>
       {/* ── SUB-TABS ── */}
       {activeModule.tabs.length > 1 && (
-        <div style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#131318",overflowX:"auto",scrollbarWidth:"none"}}>
+        <div className="sub-tabs" style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#131318",overflowX:"auto",scrollbarWidth:"none"}}>
           {activeModule.tabs.map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)} style={{
               padding:"9px 16px",fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".15em",
@@ -1819,7 +1831,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       )}
 
       {/* ── TAB CONTENT ── */}
-      <div style={{padding:"24px 44px 80px",maxWidth:1200}}>
+      <div className="tab-content" style={{padding:"24px 44px 80px",maxWidth:1200}}>
 
         {/* ══ HOY ══ */}
         {tab==="hoy" && (
@@ -3635,6 +3647,60 @@ Analiza este día y responde SOLO JSON sin backticks:
       )}
 
       </div>
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <nav className="mobile-bottom-nav" style={{
+        position:"fixed",bottom:0,left:0,right:0,zIndex:100,
+        background:"#0e0e14",borderTop:"1px solid #2a2a38",
+        display:"none", // overridden by CSS on mobile
+        alignItems:"stretch",
+        paddingBottom:"env(safe-area-inset-bottom,0px)",
+      }}>
+        {MODULES.map(m=>{
+          const isActive = activeModule.id === m.id;
+          const ms = m.id==="cuerpo" ? calcMetabolicScore(labResults, allInbody, log, targets) : null;
+          const scoreColor = ms ? (ms.score>=80?"#3ddc84":ms.score>=65?"#ffb830":"#ff4d4d") : null;
+          return (
+            <button key={m.id} onClick={()=>setTab(m.tabs[0][0])} style={{
+              flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+              gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",
+              borderTop: isActive ? "2px solid #a8ff3e" : "2px solid transparent",
+              transition:"all .15s",minWidth:0,
+            }}>
+              <span style={{fontSize:18,lineHeight:1}}>{m.icon}</span>
+              <span style={{
+                fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",letterSpacing:".1em",
+                textTransform:"uppercase",color:isActive?"#a8ff3e":"#44445a",
+                lineHeight:1,whiteSpace:"nowrap",
+              }}>{m.label}</span>
+              {/* Badge indicators */}
+              {m.id==="nutri" && todayLog.length>0 && (
+                <span style={{
+                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
+                  background:todayKcalPct>=90?"rgba(61,220,132,.2)":todayKcalPct>=60?"rgba(255,184,48,.2)":"rgba(255,77,77,.2)",
+                  color:todayKcalPct>=90?"#3ddc84":todayKcalPct>=60?"#ffb830":"#ff4d4d",
+                  borderRadius:2,padding:"1px 4px",letterSpacing:".04em",
+                }}>{todayMacros.calories}k</span>
+              )}
+              {m.id==="cuerpo" && ms && (
+                <span style={{
+                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
+                  background:`${scoreColor}22`,color:scoreColor,
+                  borderRadius:2,padding:"1px 4px",
+                }}>{ms.score}</span>
+              )}
+              {m.id==="entrena" && (
+                <span style={{
+                  fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",
+                  background:isTrainingDay?"rgba(168,255,62,.1)":"rgba(68,68,90,.15)",
+                  color:isTrainingDay?"#a8ff3e":"#44445a",
+                  borderRadius:2,padding:"1px 4px",
+                }}>{isTrainingDay?"HOY":"DESC"}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
     </div>
     </>
   );
