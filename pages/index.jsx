@@ -443,12 +443,23 @@ function AppInner() {
     if (!user) return;
     (async () => {
       try {
-        const [profile, logData, favsData, photos] = await Promise.all([
-          getProfile(user.id),
-          getFoodLog(user.id),
-          getFavorites(user.id),
-          getBodyPhotos(user.id),
+        const [profileResult, logData, favsData, photos] = await Promise.all([
+          getProfile(user.id).catch(() => null),
+          getFoodLog(user.id).catch(() => ({})),
+          getFavorites(user.id).catch(() => []),
+          getBodyPhotos(user.id).catch(() => []),
         ]);
+        // Auto-create profile if trigger didn't fire
+        const profile = profileResult || await upsertProfile(user.id, {
+          name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario',
+          goals: USER_PROFILE_DEFAULT.goals,
+          health_notes: USER_PROFILE_DEFAULT.health_notes,
+          equipment: USER_PROFILE_DEFAULT.equipment,
+          supplements: USER_PROFILE_DEFAULT.supplements,
+          session_duration: USER_PROFILE_DEFAULT.session_duration,
+          training_days: USER_PROFILE_DEFAULT.training_days,
+          targets: TARGETS_DEF,
+        }).catch(() => null);
         if (profile) {
           const tgt = profile.targets || TARGETS_DEF;
           setTargets(tgt); setTmpTargets(tgt);
