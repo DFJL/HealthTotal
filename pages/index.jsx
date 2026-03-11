@@ -705,9 +705,7 @@ Analiza este día y responde SOLO JSON sin backticks:
 {"status":"verde|amarillo|rojo","titulo":"frase corta del estado del día (max 8 palabras)","resumen":"análisis de 2-3 oraciones: qué está yendo bien, qué mejorar, impacto en LDL/HbA1c","proteina_pct":número_0_a_100,"calorias_pct":número_0_a_100,"ldl_net":"positivo|neutro|negativo","hba1c_net":"positivo|neutro|negativo","tip":"1 consejo accionable concreto para el resto del día"}`}]})});
       const data = await res.json();
       const rawText = data.content.map(b=>b.text||"").join("");
-      const m3 = rawText.match(/\{[\s\S]*\}/);
-      if (!m3) throw new Error("No JSON in response");
-      const parsed = extractJSON(txt3);
+      const parsed = extractJSON(rawText);
       setDayInsight(prev=>({...prev,[dateKey]:parsed}));
     } catch(e) {
       setDayInsight(prev=>({...prev,[dateKey]:{status:"amarillo",titulo:"Error al analizar",resumen:"No se pudo generar el análisis. Intenta de nuevo.",tip:""}}));
@@ -1182,7 +1180,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       onDrop={handleDrop}>
                       <input ref={imgRef} type="file" accept="image/*" capture="environment" onChange={handleImg}/>
                       {aiImage
-                        ? <img src={aiImage} alt="" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:3,display:"block"}}/>
+                        ? <img src={aiImage} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,display:"block"}}/>
                         : <><div style={{fontSize:28,marginBottom:6}}>📷</div>
                             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",letterSpacing:".1em"}}>SUBIR FOTO DEL PLATO</div>
                             <div style={{fontSize:12,color:"#44445a",marginTop:4}}>click, arrastrá o pegá una imagen</div></>
@@ -1289,7 +1287,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       {e.score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{e.score}/10</span>}
                     </div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:14,marginBottom:6}}>{e.name}</div>
-                    {e.image && <img src={e.image} alt="" style={{width:"100%",height:120,objectFit:"cover",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
+                    {e.image && <img src={e.image} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,marginBottom:6,display:"block"}}/>}
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",marginBottom:4}}>
                       <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span> · <span style={{color:"#a8ff3e"}}>{e.carbs}g C</span> · <span style={{color:"#ff7a4d"}}>{e.fats}g F</span>
                     </div>
