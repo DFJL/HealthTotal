@@ -301,6 +301,319 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 `;
 
 
+
+// ═══════════════════════════════════════════════════════
+// ONBOARDING WIZARD
+// ═══════════════════════════════════════════════════════
+const ONBOARDING_STEPS = [
+  { id:"welcome",   icon:"👋", title:"Bienvenido",          sub:"Cuéntanos sobre ti" },
+  { id:"body",      icon:"📊", title:"Composición corporal", sub:"Tu punto de partida" },
+  { id:"health",    icon:"🩺", title:"Salud & Metas",        sub:"Contexto clínico" },
+  { id:"training",  icon:"⚡", title:"Entrenamiento",         sub:"Tu equipo y rutina" },
+  { id:"nutrition", icon:"🥗", title:"Nutrición",            sub:"Metas de macros" },
+];
+
+function OnboardingWizard({ userEmail, defaultEquipment, defaultSupplements, onComplete }) {
+  const [step, setStep] = useState(0);
+  const [data, setData] = useState({
+    name: userEmail?.split("@")[0] || "",
+    age: "",
+    weight: "",
+    height: "",
+    goals: "Recomposición corporal, reducir grasa visceral",
+    health_notes: "",
+    conditions: [],
+    medications: [],
+    equipment: defaultEquipment,
+    supplements: defaultSupplements,
+    session_duration: "45-60 min",
+    training_days: 5,
+    targets: { calories: 2300, protein: 165, carbs: 215, fats: 62 },
+  });
+  const [condDraft, setCondDraft] = useState("");
+  const [medDraft, setMedDraft] = useState("");
+
+  const upd = (k, v) => setData(d => ({ ...d, [k]: v }));
+  const isLast = step === ONBOARDING_STEPS.length - 1;
+
+  // Auto-calculate targets from weight/goals when user fills body data
+  const calcTargets = (weight, goals) => {
+    const w = parseFloat(weight) || 80;
+    const protein = Math.round(w * 2.0);
+    const calories = Math.round(w * 28);
+    const fats = Math.round(calories * 0.25 / 9);
+    const carbs = Math.round((calories - protein * 4 - fats * 9) / 4);
+    return { calories, protein, carbs: Math.max(carbs, 100), fats };
+  };
+
+  const handleNext = () => {
+    if (step === 1 && data.weight) {
+      upd("targets", calcTargets(data.weight, data.goals));
+    }
+    if (isLast) {
+      const healthNotes = [
+        data.health_notes,
+        data.conditions.length > 0 ? `Condiciones: ${data.conditions.join(", ")}` : "",
+        data.medications.length > 0 ? `Medicamentos: ${data.medications.join(", ")}` : "",
+      ].filter(Boolean).join(". ");
+      onComplete({ ...data, health_notes: healthNotes });
+    } else {
+      setStep(s => s + 1);
+    }
+  };
+
+  const canNext = () => {
+    if (step === 0) return data.name.trim().length > 0;
+    if (step === 1) return data.weight !== "" && data.age !== "";
+    return true;
+  };
+
+  const S = {
+    overlay: { position:"fixed",inset:0,background:"#0c0c0f",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Instrument Sans',sans-serif" },
+    card:    { width:"100%",maxWidth:520,background:"#131318",border:"1px solid #2a2a38",borderRadius:6,padding:28,position:"relative" },
+    inp:     { width:"100%",background:"#0c0c0f",border:"1px solid #2a2a38",borderRadius:3,padding:"10px 14px",color:"#e8e8f0",fontFamily:"'Instrument Sans',sans-serif",fontSize:14,outline:"none",boxSizing:"border-box" },
+    lbl:     { fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".15em",textTransform:"uppercase",color:"#44445a",display:"block",marginBottom:6 },
+  };
+
+  const curr = ONBOARDING_STEPS[step];
+
+  return (
+    <div style={S.overlay}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Instrument+Sans:wght@0,400;0,500;0,600&family=JetBrains+Mono:wght@400;500&display=swap');
+        .ob-inp:focus { border-color: #a8ff3e !important; }
+        .ob-inp::placeholder { color: #44445a; }
+        .ob-btn:hover { opacity: .88; }
+      `}</style>
+
+      {/* Background glow */}
+      <div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",width:600,height:600,background:"radial-gradient(circle,rgba(168,255,62,.04),transparent 65%)",pointerEvents:"none"}}/>
+
+      <div style={S.card}>
+        {/* Progress bar */}
+        <div style={{display:"flex",gap:4,marginBottom:28}}>
+          {ONBOARDING_STEPS.map((s,i) => (
+            <div key={s.id} style={{flex:1,height:3,borderRadius:2,background:i<=step?"#a8ff3e":"#2a2a38",transition:"background .3s"}}/>
+          ))}
+        </div>
+
+        {/* Step header */}
+        <div style={{marginBottom:24}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:8,textTransform:"uppercase"}}>
+            PASO {step+1} DE {ONBOARDING_STEPS.length}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
+            <span style={{fontSize:28}}>{curr.icon}</span>
+            <div>
+              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:24,lineHeight:1,color:"#e8e8f0"}}>{curr.title}</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginTop:3}}>{curr.sub}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Step 0: Welcome / Name ── */}
+        {step === 0 && (
+          <div>
+            <div style={{marginBottom:16}}>
+              <label style={S.lbl}>¿Cómo te llamas?</label>
+              <input value={data.name} onChange={e=>upd("name",e.target.value)}
+                placeholder="Tu nombre completo" className="ob-inp"
+                style={{...S.inp,fontSize:18,fontWeight:600,fontFamily:"'Syne',sans-serif"}}
+                onKeyDown={e=>e.key==="Enter"&&canNext()&&handleNext()}
+                autoFocus
+              />
+            </div>
+            <div style={{background:"rgba(168,255,62,.05)",border:"1px solid rgba(168,255,62,.1)",borderRadius:4,padding:"14px 16px"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".15em",marginBottom:6}}>QUÉ CONSTRUIMOS JUNTOS</div>
+              <div style={{fontSize:12,color:"#8888a8",lineHeight:1.7}}>
+                Tu dashboard personal de salud metabólica. Tracking de nutrición con IA, composición corporal, labs y rutinas — todo conectado para optimizar tu salud.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 1: Body data ── */}
+        {step === 1 && (
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <label style={S.lbl}>Edad</label>
+                <input type="number" value={data.age} onChange={e=>upd("age",e.target.value)}
+                  placeholder="39" className="ob-inp" style={S.inp} min={18} max={99}/>
+              </div>
+              <div>
+                <label style={S.lbl}>Peso actual (kg)</label>
+                <input type="number" value={data.weight} onChange={e=>{ upd("weight",e.target.value); }}
+                  placeholder="82" className="ob-inp" style={S.inp} step="0.1"/>
+              </div>
+              <div>
+                <label style={S.lbl}>Altura (cm)</label>
+                <input type="number" value={data.height} onChange={e=>upd("height",e.target.value)}
+                  placeholder="175" className="ob-inp" style={S.inp}/>
+              </div>
+              <div>
+                <label style={S.lbl}>Días de entreno/semana</label>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
+                  {[3,4,5,6].map(d=>(
+                    <button key={d} onClick={()=>upd("training_days",d)} style={{
+                      flex:1,padding:"8px 4px",border:"none",borderRadius:3,cursor:"pointer",
+                      background:data.training_days===d?"#a8ff3e":"#1a1a22",
+                      color:data.training_days===d?"#0c0c0f":"#8888a8",
+                      fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,
+                    }}>{d}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {data.weight && (
+              <div style={{background:"rgba(77,200,255,.06)",border:"1px solid rgba(77,200,255,.15)",borderRadius:3,padding:"10px 14px"}}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#4dc8ff",letterSpacing:".12em",marginBottom:4}}>MACROS SUGERIDOS PARA {data.weight}kg</div>
+                {(() => { const t = calcTargets(data.weight, data.goals); return (
+                  <div style={{display:"flex",gap:16,fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>
+                    <span><strong style={{color:"#ffb830"}}>{t.calories}</strong> kcal</span>
+                    <span><strong style={{color:"#4dc8ff"}}>{t.protein}g</strong> prot</span>
+                    <span><strong style={{color:"#a8ff3e"}}>{t.carbs}g</strong> carbs</span>
+                    <span><strong style={{color:"#ff7a4d"}}>{t.fats}g</strong> grasas</span>
+                  </div>
+                ); })()}
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>Ajustable en la siguiente pantalla</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Step 2: Health & Goals ── */}
+        {step === 2 && (
+          <div>
+            <div style={{marginBottom:14}}>
+              <label style={S.lbl}>Objetivo principal</label>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {[
+                  ["Recomposición corporal (perder grasa + ganar músculo)","Recomposición corporal, reducir grasa visceral"],
+                  ["Perder peso","Pérdida de peso, déficit calórico controlado"],
+                  ["Ganar masa muscular","Ganancia muscular, superávit calórico moderado"],
+                  ["Salud general y longevidad","Salud general, mejorar marcadores metabólicos"],
+                ].map(([label, val])=>(
+                  <button key={val} onClick={()=>upd("goals",val)} style={{
+                    padding:"10px 14px",border:`1px solid ${data.goals===val?"#a8ff3e":"#2a2a38"}`,
+                    borderRadius:3,cursor:"pointer",textAlign:"left",
+                    background:data.goals===val?"rgba(168,255,62,.08)":"#0c0c0f",
+                    color:data.goals===val?"#e8e8f0":"#8888a8",
+                    fontSize:13,fontFamily:"'Instrument Sans',sans-serif",
+                    transition:"all .15s",
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={S.lbl}>Condiciones médicas (opcional)</label>
+              <ChipInput label="" icon="" items={data.conditions} color="#ffb830"
+                onChange={v=>upd("conditions",v)}/>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:-8}}>
+                Ej: Hipertensión, Diabetes tipo 2, Dislipidemia, Hipotiroidismo
+              </div>
+            </div>
+            <div>
+              <label style={S.lbl}>Medicamentos actuales (opcional)</label>
+              <ChipInput label="" icon="" items={data.medications} color="#4dc8ff"
+                onChange={v=>upd("medications",v)}/>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:-8}}>
+                Ej: Rosuvastatina 10mg, Metformina, Levotiroxina
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Training ── */}
+        {step === 3 && (
+          <div>
+            <ChipInput label="Equipo disponible" icon="🏋️"
+              items={data.equipment} color="#a8ff3e"
+              onChange={v=>upd("equipment",v)}/>
+            <ChipInput label="Suplementos actuales" icon="💊"
+              items={data.supplements} color="#4dc8ff"
+              onChange={v=>upd("supplements",v)}/>
+            <div style={{marginBottom:14}}>
+              <label style={S.lbl}>Duración por sesión</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["30 min","45 min","45-60 min","60 min","60-90 min","90 min"].map(d=>(
+                  <button key={d} onClick={()=>upd("session_duration",d)} style={{
+                    padding:"7px 12px",border:"none",borderRadius:3,cursor:"pointer",
+                    background:data.session_duration===d?"#a8ff3e":"#1a1a22",
+                    color:data.session_duration===d?"#0c0c0f":"#8888a8",
+                    fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".06em",
+                    transition:"all .15s",
+                  }}>{d}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Nutrition targets ── */}
+        {step === 4 && (
+          <div>
+            <div style={{background:"rgba(168,255,62,.05)",border:"1px solid rgba(168,255,62,.1)",borderRadius:4,padding:"12px 14px",marginBottom:16}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".12em",marginBottom:4}}>MACROS CALCULADOS PARA TU PERFIL</div>
+              <div style={{fontSize:12,color:"#8888a8"}}>Basado en {data.weight}kg · {data.goals.split(",")[0]}. Puedes ajustar ahora o después en CONFIG.</div>
+            </div>
+            {[
+              {k:"calories",label:"Calorías diarias",unit:"kcal",color:"#ffb830",min:1200,max:4000},
+              {k:"protein", label:"Proteína",unit:"g",color:"#4dc8ff",min:50,max:300},
+              {k:"carbs",   label:"Carbohidratos",unit:"g",color:"#a8ff3e",min:50,max:500},
+              {k:"fats",    label:"Grasas",unit:"g",color:"#ff7a4d",min:30,max:200},
+            ].map(({k,label,unit,color,min,max})=>(
+              <div key={k} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <label style={{...S.lbl,marginBottom:0}}>{label}</label>
+                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color}}>{data.targets[k]}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#44445a",marginLeft:2}}>{unit}</span></span>
+                </div>
+                <input type="range" min={min} max={max} step={k==="calories"?50:5}
+                  value={data.targets[k]}
+                  onChange={e=>upd("targets",{...data.targets,[k]:Number(e.target.value)})}
+                  style={{width:"100%",accentColor:color,cursor:"pointer"}}
+                />
+                <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>
+                  <span>{min}{unit}</span><span>{max}{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div style={{display:"flex",gap:10,marginTop:20,alignItems:"center"}}>
+          {step > 0 && (
+            <button onClick={()=>setStep(s=>s-1)} style={{
+              background:"none",border:"1px solid #2a2a38",borderRadius:3,
+              color:"#8888a8",padding:"11px 16px",cursor:"pointer",
+              fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em",
+            }}>← ATRÁS</button>
+          )}
+          <button onClick={handleNext} disabled={!canNext()} className="ob-btn" style={{
+            flex:1,padding:"13px",background:canNext()?"#a8ff3e":"#1e1e2a",
+            color:canNext()?"#0c0c0f":"#44445a",border:"none",borderRadius:3,cursor:canNext()?"pointer":"default",
+            fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",fontWeight:700,letterSpacing:".18em",
+            transition:"all .15s",
+          }}>
+            {isLast ? "✓ COMENZAR MI DASHBOARD →" : "CONTINUAR →"}
+          </button>
+        </div>
+
+        {/* Skip option */}
+        {step > 0 && !isLast && (
+          <div style={{textAlign:"center",marginTop:12}}>
+            <button onClick={()=>setStep(s=>s+1)} style={{
+              background:"none",border:"none",cursor:"pointer",
+              fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#2a2a38",letterSpacing:".1em",
+            }}>SALTAR ESTE PASO</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChipInput({ label, icon, items, color="#a8ff3e", onChange }) {
   const [draft, setDraft] = useState("");
   const addItem = () => {
@@ -419,6 +732,7 @@ function AppInner() {
   const [log, setLog]     = useState(INITIAL_LOG);
   const [favs, setFavs]   = useState(INITIAL_FAVS);
   const [loaded, setLoaded] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [selDate, setSelDate] = useState(todayStr());
   const [showAdd, setShowAdd] = useState(false);
   const [addMode, setAddMode] = useState("ai");
@@ -533,18 +847,23 @@ function AppInner() {
           training_days: USER_PROFILE_DEFAULT.training_days,
           targets: TARGETS_DEF,
         }).catch(() => null);
-        if (profile) {
+        if (!profile) {
+          // Brand new user — no profile row yet, show onboarding
+          setShowOnboarding(true);
+        } else if (profile) {
           const tgt = profile.targets || TARGETS_DEF;
           setTargets(tgt); setTmpTargets(tgt);
+          const isNewUser = !profile.onboarded;
           setUserProfile({
             name:             profile.name             || USER_PROFILE_DEFAULT.name,
             goals:            profile.goals            || USER_PROFILE_DEFAULT.goals,
             health_notes:     profile.health_notes     || USER_PROFILE_DEFAULT.health_notes,
-            equipment:        profile.equipment        || USER_PROFILE_DEFAULT.equipment,
-            supplements:      profile.supplements      || USER_PROFILE_DEFAULT.supplements,
+            equipment:        Array.isArray(profile.equipment) && profile.equipment.length > 0 ? profile.equipment : USER_PROFILE_DEFAULT.equipment,
+            supplements:      Array.isArray(profile.supplements) && profile.supplements.length > 0 ? profile.supplements : USER_PROFILE_DEFAULT.supplements,
             session_duration: profile.session_duration || USER_PROFILE_DEFAULT.session_duration,
             training_days:    profile.training_days    || USER_PROFILE_DEFAULT.training_days,
           });
+          if (isNewUser) setShowOnboarding(true);
         }
         if (Object.keys(logData).length > 0) {
           setLog(logData);
@@ -618,6 +937,32 @@ function AppInner() {
     }).catch(console.error);
   };
 
+  const completeOnboarding = async (data) => {
+    const newProfile = {
+      name: data.name,
+      goals: data.goals,
+      health_notes: data.health_notes,
+      equipment: data.equipment,
+      supplements: data.supplements,
+      session_duration: data.session_duration,
+      training_days: data.training_days,
+    };
+    const newTargets = data.targets || targets;
+    setUserProfile(newProfile);
+    setTargets(newTargets); setTmpTargets(newTargets);
+    setShowOnboarding(false);
+    if (user) {
+      await upsertProfile(user.id, {
+        ...newProfile,
+        targets: newTargets,
+        onboarded: true,
+        age:       data.age       ? Number(data.age)       : null,
+        weight_kg: data.weight    ? Number(data.weight)    : null,
+        height_cm: data.height    ? Number(data.height)    : null,
+      }).catch(console.error);
+    }
+  };
+
   // Auto-analyze day insight when switching to a date that has entries but no insight yet
   useEffect(() => {
     const entries = log[selDate] || [];
@@ -627,6 +972,16 @@ function AppInner() {
   }, [selDate, tab, loaded]);
 
   if (authLoading) return null;
+
+  // ── ONBOARDING OVERLAY ──
+  if (showOnboarding && loaded) return (
+    <OnboardingWizard
+      userEmail={user?.email || ""}
+      defaultEquipment={USER_PROFILE_DEFAULT.equipment}
+      defaultSupplements={USER_PROFILE_DEFAULT.supplements}
+      onComplete={completeOnboarding}
+    />
+  );
 
   const dayLog     = log[selDate] || [];
   const totals     = calcMacros(dayLog);
@@ -662,6 +1017,7 @@ function AppInner() {
     const r=new FileReader();
     r.onload = ev => { setAiImage(ev.target.result); setAiB64(ev.target.result.split(",")[1]); };
     r.readAsDataURL(f);
+    e.target.value = ""; // reset so same file can be re-selected
   };
   const handleDrop = e => {
     e.preventDefault(); setDragOver(false);
@@ -1447,16 +1803,18 @@ Analiza este día y responde SOLO JSON sin backticks:
                     <textarea value={aiInput} onChange={e=>setAiInput(e.target.value)}
                       placeholder="Describe el alimento... ej: 2 huevos revueltos, arroz integral 100g, ensalada, aguacate"
                       rows={3} className="inp" style={{resize:"vertical",marginBottom:8}}/>
+                    <input ref={imgRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleImg}/>
                     <div className={`photo-zone${aiImage?" has-img":dragOver?" drag":""}`}
+                      onClick={()=>imgRef.current?.click()}
                       onDragOver={e=>{e.preventDefault();setDragOver(true);}}
                       onDragLeave={()=>setDragOver(false)}
-                      onDrop={handleDrop}>
-                      <input ref={imgRef} type="file" accept="image/*" capture="environment" onChange={handleImg}/>
+                      onDrop={handleDrop}
+                      style={{cursor:"pointer"}}>
                       {aiImage
                         ? <img src={aiImage} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,display:"block"}}/>
                         : <><div style={{fontSize:28,marginBottom:6}}>📷</div>
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",letterSpacing:".1em"}}>SUBIR FOTO DEL PLATO</div>
-                            <div style={{fontSize:12,color:"#44445a",marginTop:4}}>click, arrastrá o pegá una imagen</div></>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",letterSpacing:".1em"}}>FOTO O GALERÍA</div>
+                            <div style={{fontSize:12,color:"#44445a",marginTop:4}}>toca para seleccionar · arrastrá en desktop</div></>
                       }
                     </div>
                     {aiImage && <button className="btn-sm" style={{width:"100%",marginBottom:8}} onClick={e=>{e.stopPropagation();setAiImage(null);setAiB64(null);}}>✕ QUITAR FOTO</button>}
@@ -2081,7 +2439,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 Sube una foto de tu resultado de laboratorio y la IA extraerá automáticamente todos los valores disponibles.
               </p>
               <div className={`photo-zone upload-zone${labsB64?" has-img":""}`} style={{marginBottom:10}}>
-                <input ref={labsImgRef} type="file" accept="image/*" onChange={e=>{
+                <input ref={labsImgRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
                   const f=e.target.files[0]; if(!f) return;
                   const r=new FileReader(); r.onload=ev=>setLabsB64(ev.target.result.split(",")[1]); r.readAsDataURL(f);
                 }}/>
