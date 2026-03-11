@@ -1319,8 +1319,6 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             ))}
           </div>
-          </div>
-          </div>
         )}
 
         {/* ══ SEMANA ══ */}
@@ -2496,7 +2494,6 @@ Analiza este día y responde SOLO JSON sin backticks:
                 {i.txt}
               </div>
             ))}
-          </div>
           </div>
         )}
 
