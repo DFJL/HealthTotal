@@ -934,14 +934,40 @@ Analiza este día y responde SOLO JSON sin backticks:
   };
   const applyImport = (txt) => {
     try {
-      // Strip any console artifacts, backticks, "undefined", leading/trailing noise
-      let clean = txt.trim()
-        .replace(/^[^{[\n]*([\[{])/s, '$1')  // drop anything before first { or [
-        .replace(/```[a-z]*/g,"").replace(/```/g,"").trim();
-
       let d;
-      try { d = JSON.parse(clean); }
-      catch(e) { alert("JSON inválido:\n" + e.message + "\n\nAsegúrate de copiar el output completo del console."); return; }
+      try {
+        // First try: plain parse (handles clean exports)
+        d = JSON.parse(txt.trim());
+      } catch(_) {
+        try {
+          // Second try: use extractJSON which handles trailing garbage, backticks, etc.
+          d = extractJSON(txt);
+        } catch(e2) {
+          // Third try: find first { or [ and extract balanced structure manually
+          const t = txt.trim();
+          const start = Math.min(
+            t.indexOf('{') === -1 ? Infinity : t.indexOf('{'),
+            t.indexOf('[') === -1 ? Infinity : t.indexOf('[')
+          );
+          if (start === Infinity) { alert("No se encontró JSON válido en el texto pegado."); return; }
+          // Walk to find matching close
+          const opener = t[start];
+          const closer = opener === '{' ? '}' : ']';
+          let depth = 0, inStr = false, esc = false, end = -1;
+          for (let i = start; i < t.length; i++) {
+            const ch = t[i];
+            if (esc) { esc = false; continue; }
+            if (ch === '\\' && inStr) { esc = true; continue; }
+            if (ch === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (ch === opener) depth++;
+            else if (ch === closer) { depth--; if (depth === 0) { end = i; break; } }
+          }
+          if (end === -1) { alert("JSON incompleto — parece que falta el cierre.\n\nError: " + e2.message); return; }
+          try { d = JSON.parse(t.slice(start, end + 1)); }
+          catch(e3) { alert("JSON inválido:\n" + e3.message + "\n\nIntenta exportar de nuevo desde CONFIG → EXPORTAR."); return; }
+        }
+      }
 
       // Auto-detect format:
       // 1) Full backup: {log:{...}, favs:[...]}
