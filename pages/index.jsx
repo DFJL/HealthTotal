@@ -830,7 +830,7 @@ Responde SOLO JSON sin backticks:
       const totDay = calcMacros(entries);
       const res = await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:`
-Perfil: Felipe, 39 años, 82.8kg, 19% grasa. Metas: LDL<100 (actual 124), HbA1c<5.7% (actual 5.90%), 185g proteína/día, 2300kcal.
+Perfil: ${userProfile.name||"Usuario"}, ${lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa`:"sin datos InBody"}. Metas: LDL<100 (actual ${LABS_HIST[LABS_HIST.length-1]?.ldl||"—"}), HbA1c<5.7% (actual ${LABS_HIST[LABS_HIST.length-1]?.hba1c||"—"}%), ${targets.protein}g proteína/día, ${targets.calories}kcal.
 Fecha: ${dateKey}. Total del día hasta ahora: ${totDay.calories}kcal, ${totDay.protein}g proteína, ${totDay.carbs}g carbos, ${totDay.fats}g grasas.
 Comidas registradas:
 ${summary}
@@ -1051,7 +1051,12 @@ Analiza este día y responde SOLO JSON sin backticks:
         <div>
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>Dashboard Integral · Feb 2026</div>
           <div style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(36px,7vw,72px)",fontWeight:800,lineHeight:.9,letterSpacing:"-.01em"}}>
-            FELIPE <span style={{color:"#a8ff3e"}}>JIMÉNEZ</span>
+            {(()=>{
+              const parts = (userProfile.name||"Usuario").toUpperCase().trim().split(" ");
+              if(parts.length===1) return <span style={{color:"#a8ff3e"}}>{parts[0]}</span>;
+              const last = parts.pop();
+              return <>{parts.join(" ")} <span style={{color:"#a8ff3e"}}>{last}</span></>;
+            })()}
           </div>
           <div style={{display:"flex",gap:24,marginTop:14,flexWrap:"wrap"}}>
             {(()=>{
