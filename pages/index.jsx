@@ -301,6 +301,51 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 `;
 
 
+function ChipInput({ label, icon, items, color="#a8ff3e", onChange }) {
+  const [draft, setDraft] = useState("");
+  const addItem = () => {
+    const v = draft.trim();
+    if (v && !items.includes(v)) onChange([...items, v]);
+    setDraft("");
+  };
+  return (
+    <div style={{marginBottom:14}}>
+      <div className="lbl" style={{marginBottom:6}}>{icon} {label}</div>
+      {/* Chips */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8,minHeight:items.length>0?0:0}}>
+        {items.map((item,i)=>(
+          <div key={i} style={{
+            display:"inline-flex",alignItems:"center",gap:6,
+            background:`${color}12`,border:`1px solid ${color}30`,
+            borderRadius:3,padding:"4px 10px",
+            fontFamily:"'Instrument Sans',sans-serif",fontSize:12,color:"#e8e8f0",
+          }}>
+            <span>{item}</span>
+            <button onClick={()=>onChange(items.filter((_,j)=>j!==i))} style={{
+              background:"none",border:"none",cursor:"pointer",
+              color:"#44445a",fontSize:14,lineHeight:1,padding:0,
+              display:"flex",alignItems:"center",
+            }}>×</button>
+          </div>
+        ))}
+        {items.length===0 && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".08em"}}>SIN ÍTEMS</span>}
+      </div>
+      {/* Input row */}
+      <div style={{display:"flex",gap:6}}>
+        <input
+          value={draft}
+          onChange={e=>setDraft(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter"){e.preventDefault();addItem();} }}
+          placeholder="Escribe y presiona Enter para agregar…"
+          className="inp"
+          style={{flex:1,fontSize:12}}
+        />
+        <button className="btn-sm" onClick={addItem} style={{flexShrink:0,color:color,borderColor:`${color}40`}}>+</button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileEditor({ userProfile, onSave }) {
   const [editing, setEditing] = useState(false);
   const [tmp, setTmp] = useState(userProfile);
@@ -309,7 +354,12 @@ function ProfileEditor({ userProfile, onSave }) {
     <div>
       <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Objetivos:</strong> {userProfile.goals}</div>
       <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Clínico:</strong> {userProfile.health_notes}</div>
-      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>{userProfile.equipment.length} equipos · {userProfile.supplements.length} suplementos · {userProfile.session_duration} · {userProfile.training_days}d/semana</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {userProfile.equipment.map((e,i)=>(
+          <span key={i} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",background:"rgba(168,255,62,.08)",color:"#a8ff3e",borderRadius:2,padding:"2px 7px"}}>{e}</span>
+        ))}
+      </div>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>{userProfile.supplements.length} suplementos · {userProfile.session_duration} · {userProfile.training_days}d/semana</div>
       <button className="btn-sm" onClick={()=>setEditing(true)}>EDITAR PERFIL</button>
     </div>
   );
@@ -323,15 +373,17 @@ function ProfileEditor({ userProfile, onSave }) {
         <div className="lbl" style={{marginBottom:4}}>🩺 Contexto clínico</div>
         <textarea value={tmp.health_notes} onChange={e=>setTmp({...tmp,health_notes:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
       </div>
-      <div style={{marginBottom:10}}>
-        <div className="lbl" style={{marginBottom:4}}>🏋️ Equipo (una línea por ítem)</div>
-        <textarea value={tmp.equipment.join("\n")} onChange={e=>setTmp({...tmp,equipment:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={5} style={{resize:"vertical"}}/>
-      </div>
-      <div style={{marginBottom:10}}>
-        <div className="lbl" style={{marginBottom:4}}>💊 Suplementos (una línea por ítem)</div>
-        <textarea value={tmp.supplements.join("\n")} onChange={e=>setTmp({...tmp,supplements:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={6} style={{resize:"vertical"}}/>
-      </div>
-      <div className="g2" style={{gap:8,marginBottom:10}}>
+      <ChipInput
+        label="Equipo disponible" icon="🏋️"
+        items={tmp.equipment} color="#a8ff3e"
+        onChange={v=>setTmp({...tmp,equipment:v})}
+      />
+      <ChipInput
+        label="Suplementos" icon="💊"
+        items={tmp.supplements} color="#4dc8ff"
+        onChange={v=>setTmp({...tmp,supplements:v})}
+      />
+      <div className="g2" style={{gap:8,marginBottom:14}}>
         <div>
           <div className="lbl" style={{marginBottom:4}}>⏱ Duración sesión</div>
           <input value={tmp.session_duration} onChange={e=>setTmp({...tmp,session_duration:e.target.value})} className="inp"/>
