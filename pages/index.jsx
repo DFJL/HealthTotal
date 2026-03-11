@@ -1,9 +1,20 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine, Legend
 } from "recharts";
+import { supabase } from "../lib/supabase";
+import {
+  getProfile, upsertProfile,
+  getFoodLog, upsertFoodEntry, deleteFoodEntry,
+  getFavorites, upsertFavorite, deleteFavorite,
+  getBodyMeasurements, insertBodyMeasurement,
+  getLabResults, insertLabResult,
+  getAiCache, setAiCache,
+  getBodyPhotos, insertBodyPhoto, deleteBodyPhoto,
+} from "../lib/db";
 
 const TARGETS_DEF = { calories: 2300, protein: 165, carbs: 215, fats: 62 };
 const INITIAL_FAVS = [
@@ -166,30 +177,8 @@ const gradeColor = g => {
 };
 const impactColor = v => v==="positivo"?"#3ddc84":v==="negativo"?"#ff4d4d":"#8888a8";
 const impactArrow = v => v==="positivo"?"↓":v==="negativo"?"↑":"→";
-const storageGet = async k => {
-  try {
-    // Try Claude artifact storage first, fall back to localStorage
-    if (typeof window.storage !== "undefined") {
-      const r = await window.storage.get(k);
-      return r;
-    }
-    const v = localStorage.getItem(k);
-    return v ? { value: v } : null;
-  } catch { 
-    try { const v = localStorage.getItem(k); return v ? { value: v } : null; } catch { return null; }
-  }
-};
-const storageSet = async (k, v) => {
-  try {
-    if (typeof window.storage !== "undefined") {
-      await window.storage.set(k, v);
-      return;
-    }
-    localStorage.setItem(k, v);
-  } catch {
-    try { localStorage.setItem(k, v); } catch {}
-  }
-};
+// Image thumbnail cache — only local data (food photos, not synced)
+const imgCache = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k,v) => { try { localStorage.setItem(k,v); } catch {} } };
 
 // Robust JSON extractor — handles markdown fences, control chars, trailing commas, truncation
 const extractJSON = (raw) => {
@@ -369,6 +358,9 @@ const USER_PROFILE_DEFAULT = {
   training_days: 5,
 };
 function AppInner() {
+  const router = useRouter();
+  const [user, setUser]   = useState(null);   // Supabase user object
+  const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("hoy");
   const [targets, setTargets] = useState(TARGETS_DEF);
   const [log, setLog]     = useState(INITIAL_LOG);
@@ -432,65 +424,117 @@ function AppInner() {
   const bodyPhotoRef  = useRef();
   const exportTextareaRef = useRef();
 
+  // ── Auth listener ──
   useEffect(() => {
-    (async () => {
-      try {
-        const [rLog,rFavs,rTgt,rCI,rCL,rOldLog,rOldFavs] = await Promise.all([
-          storageGet("v8_log"), storageGet("v8_favs"), storageGet("v8_tgt"),
-          storageGet("v7_custom_inbody"), storageGet("v7_custom_labs"),
-          storageGet("v5_log"), storageGet("v5_favs"),
-        ]);
-        if (rLog?.value) {
-          setLog(JSON.parse(rLog.value));
-        } else {
-          let mergedLog = {...INITIAL_LOG};
-          if (rOldLog?.value) {
-            const old = JSON.parse(rOldLog.value);
-            Object.keys(old).forEach(date => {
-              if (!mergedLog[date] || mergedLog[date].length === 0) mergedLog[date] = old[date];
-            });
-          }
-          setLog(mergedLog);
-          await storageSet("v8_log", JSON.stringify(mergedLog));
-        }
-        if (rFavs?.value) setFavs(JSON.parse(rFavs.value));
-        else {
-          const initFavs = rOldFavs?.value ? JSON.parse(rOldFavs.value) : INITIAL_FAVS;
-          setFavs(initFavs);
-          await storageSet("v8_favs", JSON.stringify(initFavs));
-        }
-        if (rTgt?.value)  { const t=JSON.parse(rTgt.value); setTargets(t); setTmpTargets(t); }
-        if (rCI?.value)   setCustomInbody(JSON.parse(rCI.value));
-        if (rCL?.value)   setCustomLabs(JSON.parse(rCL.value));
-        const [rPhotos, rDismissed] = await Promise.all([
-          storageGet("v8_body_photos"), storageGet("v8_dismissed_notifs"),
-        ]);
-        if (rPhotos?.value)    setBodyPhotos(JSON.parse(rPhotos.value));
-        if (rDismissed?.value) setDismissedNotifs(JSON.parse(rDismissed.value));
-        // Load AI insight caches
-        const [rWI, rAH] = await Promise.all([storageGet("v8_cache_weekinsights"), storageGet("v8_cache_aihabits")]);
-        if (rWI?.value) { const c=JSON.parse(rWI.value); setWeekInsights(c.data); setWeekInsightsTs(c.ts); }
-        if (rAH?.value) { const c=JSON.parse(rAH.value); setAiHabits(c.data); setAiHabitsTs(c.ts); }
-        const [rRT, rSR, rUP] = await Promise.all([storageGet("v8_cache_routine"), storageGet("v8_saved_routines"), storageGet("v8_user_profile")]);
-        if (rRT?.value) { const c=JSON.parse(rRT.value); setGeneratedRoutine(c.data); setRoutineTs(c.ts); }
-        if (rSR?.value) setSavedRoutines(JSON.parse(rSR.value));
-        if (rUP?.value) setUserProfile(JSON.parse(rUP.value));
-      } catch(e) { console.error(e); }
-      finally { setLoaded(true); }
-    })();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { router.replace("/auth"); setAuthLoading(false); return; }
+      setUser(session.user);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) { setUser(null); router.replace("/auth"); }
+      else setUser(session.user);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const saveLog     = async l => { setLog(l);     await storageSet("v8_log",  JSON.stringify(l)); };
-  const saveFavs    = async f => { setFavs(f);    await storageSet("v8_favs", JSON.stringify(f)); };
-  const saveTargets = async t => { setTargets(t); setTmpTargets(t); await storageSet("v8_tgt", JSON.stringify(t)); };
-  const saveCustomInbody = async d => { setCustomInbody(d); await storageSet("v7_custom_inbody", JSON.stringify(d)); };
-  const saveCustomLabs   = async d => { setCustomLabs(d);   await storageSet("v7_custom_labs",   JSON.stringify(d)); };
-  const saveBodyPhotos = async d => { setBodyPhotos(d); await storageSet("v8_body_photos", JSON.stringify(d)); };
-  const dismissNotif   = async id => {
+  // ── Load all data from Supabase once user is set ──
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const [profile, logData, favsData, photos] = await Promise.all([
+          getProfile(user.id),
+          getFoodLog(user.id),
+          getFavorites(user.id),
+          getBodyPhotos(user.id),
+        ]);
+        if (profile) {
+          const tgt = profile.targets || TARGETS_DEF;
+          setTargets(tgt); setTmpTargets(tgt);
+          setUserProfile({
+            name:             profile.name             || USER_PROFILE_DEFAULT.name,
+            goals:            profile.goals            || USER_PROFILE_DEFAULT.goals,
+            health_notes:     profile.health_notes     || USER_PROFILE_DEFAULT.health_notes,
+            equipment:        profile.equipment        || USER_PROFILE_DEFAULT.equipment,
+            supplements:      profile.supplements      || USER_PROFILE_DEFAULT.supplements,
+            session_duration: profile.session_duration || USER_PROFILE_DEFAULT.session_duration,
+            training_days:    profile.training_days    || USER_PROFILE_DEFAULT.training_days,
+          });
+        }
+        if (Object.keys(logData).length > 0) {
+          setLog(logData);
+        } else {
+          setLog(INITIAL_LOG);
+          for (const [date, entries] of Object.entries(INITIAL_LOG)) {
+            for (const entry of entries) {
+              await upsertFoodEntry(user.id, date, entry).catch(() => {});
+            }
+          }
+        }
+        if (favsData.length > 0) setFavs(favsData);
+        if (photos.length > 0)   setBodyPhotos(photos);
+        if (profile?.dismissed_notifs) setDismissedNotifs(profile.dismissed_notifs);
+        const [wiCache, ahCache, rtCache, srCache] = await Promise.all([
+          getAiCache(user.id, "week_insights"),
+          getAiCache(user.id, "ai_habits"),
+          getAiCache(user.id, "routine"),
+          getAiCache(user.id, "saved_routines"),
+        ]);
+        if (wiCache) { setWeekInsights(wiCache.data);      setWeekInsightsTs(wiCache.ts); }
+        if (ahCache) { setAiHabits(ahCache.data);          setAiHabitsTs(ahCache.ts); }
+        if (rtCache) { setGeneratedRoutine(rtCache.data);  setRoutineTs(rtCache.ts); }
+        if (srCache) setSavedRoutines(srCache.data || []);
+      } catch(e) { console.error("Data load error:", e); }
+      finally { setLoaded(true); }
+    })();
+  }, [user]);
+
+  // ── Save functions ──
+  const saveLog = async (newLog, changedDate = null) => {
+    setLog(newLog);
+    if (!user) return;
+    // Only sync the changed date to avoid re-upserting entire log
+    const datesToSync = changedDate ? [changedDate] : Object.keys(newLog);
+    for (const date of datesToSync) {
+      for (const entry of (newLog[date] || [])) {
+        upsertFoodEntry(user.id, date, entry).catch(console.error);
+      }
+    }
+  };
+  const saveFavs = async (newFavs, upsertId = null) => {
+    setFavs(newFavs);
+    if (!user) return;
+    if (upsertId) {
+      const f = newFavs.find(x => x.id === upsertId);
+      if (f) upsertFavorite(user.id, f).catch(console.error);
+    }
+  };
+  const saveTargets = async (t) => {
+    setTargets(t); setTmpTargets(t);
+    if (user) await upsertProfile(user.id, { targets: t }).catch(console.error);
+  };
+  const saveCustomInbody = async (d, newRow = null) => { setCustomInbody(d); if (user && newRow) insertBodyMeasurement(user.id, newRow).catch(console.error); };
+  const saveCustomLabs = async (d, newLab = null) => { setCustomLabs(d); if (user && newLab) insertLabResult(user.id, newLab).catch(console.error); };
+  const saveBodyPhotos   = async (photos) => {
+    setBodyPhotos(photos);
+    if (user && photos.length > 0) insertBodyPhoto(user.id, photos[photos.length-1]).catch(() => {});
+  };
+  const dismissNotif = async id => {
     const next = [...dismissedNotifs, id];
     setDismissedNotifs(next);
-    await storageSet("v8_dismissed_notifs", JSON.stringify(next));
+    if (user) upsertProfile(user.id, { dismissed_notifs: next }).catch(console.error);
   };
+  const saveUserProfile = async (p) => {
+    setUserProfile(p);
+    if (user) await upsertProfile(user.id, {
+      goals: p.goals, health_notes: p.health_notes,
+      equipment: p.equipment, supplements: p.supplements,
+      session_duration: p.session_duration, training_days: p.training_days,
+    }).catch(console.error);
+  };
+
+  if (authLoading) return null;
 
   const dayLog     = log[selDate] || [];
   const totals     = calcMacros(dayLog);
@@ -527,7 +571,7 @@ function AppInner() {
   };
 
   const resetAdd = () => { setShowAdd(false); setAiResult(null); setAiInput(""); setAiImage(null); setAiB64(null); };
-  const addEntry = e => { saveLog({...log,[selDate]:[...dayLog,{...e,meal:e.meal||selMeal,dayType:e.dayType||selDayType,id:Date.now()}]}); resetAdd(); };
+  const addEntry = e => { const nl={...log,[selDate]:[...dayLog,{...e,meal:e.meal||selMeal,dayType:e.dayType||selDayType,id:Date.now()}]}; saveLog(nl, selDate); resetAdd(); };
 
   const handleImg = e => {
     const f=e.target.files[0]; if(!f) return;
@@ -574,11 +618,11 @@ function AppInner() {
             canvas.width = img.width * scale; canvas.height = img.height * scale;
             canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
             thumbDataUrl = canvas.toDataURL("image/jpeg", 0.72);
-            try { localStorage.setItem(`img_${entryId}`, thumbDataUrl); } catch {}
+            imgCache.set(`img_${entryId}`, thumbDataUrl);
           } catch { thumbDataUrl = aiImage; }
         }
         const newEntry = {...parsed, meal:parsed.meal||selMeal, dayType:parsed.dayType||selDayType, id:entryId, image:thumbDataUrl};
-        saveLog({...log,[selDate]:[...(log[selDate]||[]), newEntry]});
+        const nl={...log,[selDate]:[...(log[selDate]||[]),newEntry]}; saveLog(nl, selDate);
         setTimeout(()=>resetAdd(), 1800);
       }
     } catch(e) {
@@ -618,7 +662,7 @@ function AppInner() {
       s: inbodyResult.inbody_score, vi: inbodyResult.visceral,
       whr: inbodyResult.whr, note: inbodyResult.notes || "Nuevo ◀",
     };
-    saveCustomInbody([...customInbody, entry]);
+    saveCustomInbody([...customInbody, entry], entry);
     setInbodyResult(null); setInbodyB64(null);
     alert("✓ Medición InBody agregada al historial");
   };
@@ -648,7 +692,7 @@ function AppInner() {
 
   const confirmLabs = () => {
     if (!labsResult || labsResult.error) return;
-    saveCustomLabs([...customLabs, labsResult]);
+    saveCustomLabs([...customLabs, labsResult], labsResult);
     setLabsResult(null); setLabsB64(null);
     alert("✓ Resultados de laboratorio agregados");
   };
@@ -690,12 +734,12 @@ Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 10 pa
       setGeneratedRoutine(routine);
       const ts = Date.now();
       setRoutineTs(ts);
-      await storageSet("v8_cache_routine", JSON.stringify({ts, data:routine}));
+      await setAiCache(user.id, "routine", routine).catch(console.error);
       // Auto-save to history
       if (!routine.error) {
         const newSaved = [{...routine, savedAt:ts, request:routineInput}, ...savedRoutines].slice(0,5);
         setSavedRoutines(newSaved);
-        await storageSet("v8_saved_routines", JSON.stringify(newSaved));
+        await setAiCache(user.id, "saved_routines", newSaved).catch(console.error);
       }
     } catch(e) {
       setGeneratedRoutine({error:`Error: ${e.message}`});
@@ -727,7 +771,7 @@ Máximo 5 hábitos. Descripción máximo 20 palabras cada una.`}]})
       setAiHabits(ahData);
       const ahTs = Date.now();
       setAiHabitsTs(ahTs);
-      await storageSet("v8_cache_aihabits", JSON.stringify({ts:ahTs, data:ahData}));
+      if (user) await setAiCache(user.id, "ai_habits", ahData).catch(console.error);
     } catch(e) { setAiHabits({error:`Error: ${e.message}`}); }
     setAiHabitsLoading(false);
   };
@@ -756,7 +800,7 @@ Responde SOLO JSON sin backticks:
       setWeekInsights(wiData);
       const wiTs = Date.now();
       setWeekInsightsTs(wiTs);
-      await storageSet("v8_cache_weekinsights", JSON.stringify({ts:wiTs, data:wiData}));
+      if (user) await setAiCache(user.id, "week_insights", wiData).catch(console.error);
     } catch(e) {
       setWeekInsights({error:"Error al generar insights. Intenta de nuevo."});
     }
@@ -895,7 +939,6 @@ Analiza este día y responde SOLO JSON sin backticks:
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
 
 
-  const saveUserProfile = async (p) => { setUserProfile(p); await storageSet("v8_user_profile", JSON.stringify(p)); };
 
   const fmtCacheAge = ts => {
     if (!ts) return null;
@@ -951,6 +994,13 @@ Analiza este día y responde SOLO JSON sin backticks:
             })()}
           </div>
         </div>
+        {/* Logout */}
+        <button onClick={async()=>{await supabase.auth.signOut();router.replace("/auth");}}
+          style={{position:"absolute",top:16,right:20,background:"none",border:"1px solid #2a2a38",
+          borderRadius:3,color:"#44445a",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+          letterSpacing:".12em",padding:"4px 10px",cursor:"pointer"}}>
+          SALIR
+        </button>
         {notifications.length > 0 && (
           <div style={{borderTop:"1px solid #1e1e2a",width:"100%"}}>
             <div style={{padding:"10px 44px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}
@@ -1356,7 +1406,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       {e.score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{e.score}/10</span>}
                     </div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:14,marginBottom:6}}>{e.name}</div>
-                    {(e.image || (typeof window!=="undefined" && localStorage.getItem(`img_${e.id}`))) && <img src={e.image || localStorage.getItem(`img_${e.id}`)} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,marginBottom:6,display:"block"}}/>}
+                    {(e.image || imgCache.get(`img_${e.id}`)) && <img src={e.image || imgCache.get(`img_${e.id}`)} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",borderRadius:3,marginBottom:6,display:"block"}}/>}
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",marginBottom:4}}>
                       <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span> · <span style={{color:"#a8ff3e"}}>{e.carbs}g C</span> · <span style={{color:"#ff7a4d"}}>{e.fats}g F</span>
                     </div>
@@ -1376,7 +1426,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                         <button
                           onClick={()=>{
                             if(isFav) saveFavs(favs.filter(f=>f.name!==e.name));
-                            else saveFavs([...favs,{id:Date.now(),name:e.name,calories:e.calories,protein:e.protein,carbs:e.carbs,fats:e.fats,grade:e.grade,meal:e.meal,dayType:e.dayType,ldl_impact:e.ldl_impact,hba1c_impact:e.hba1c_impact,score:e.score,notes:e.notes}]);
+                            else { const nf={id:Date.now(),name:e.name,calories:e.calories,protein:e.protein,carbs:e.carbs,fats:e.fats,grade:e.grade,meal:e.meal,dayType:e.dayType,ldl_impact:e.ldl_impact,hba1c_impact:e.hba1c_impact,score:e.score,notes:e.notes}; saveFavs([...favs,nf],nf.id); }
                           }}
                           title={isFav?"Quitar de favoritos":"Guardar en favoritos"}
                           style={{background:"none",border:"none",cursor:"pointer",fontSize:16,padding:"4px 6px",opacity:isFav?1:0.35,transition:"opacity .2s,transform .15s",lineHeight:1}}
@@ -1385,7 +1435,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                         >⭐</button>
                       );
                     })()}
-                    <button onClick={()=>saveLog({...log,[selDate]:dayLog.filter(x=>x.id!==e.id)})}
+                    <button onClick={()=>{deleteFoodEntry(e.id).catch(()=>{}); saveLog({...log,[selDate]:dayLog.filter(x=>x.id!==e.id)},selDate);}}
                       style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14,padding:"4px 6px"}}>🗑</button>
                   </div>
                 </div>
@@ -2129,7 +2179,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       </div>
                       <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",flexShrink:0,textAlign:"right"}}>
                         {r.savedAt ? fmtCacheAge(r.savedAt) : ""}
-                        <button onClick={e=>{e.stopPropagation();const ns=savedRoutines.filter((_,j)=>j!==i);setSavedRoutines(ns);storageSet("v8_saved_routines",JSON.stringify(ns));}}
+                        <button onClick={e=>{e.stopPropagation();const ns=savedRoutines.filter((_,j)=>j!==i);setSavedRoutines(ns);if(user)setAiCache(user.id,"saved_routines",ns).catch(()=>{});}}
                           style={{display:"block",background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:12,marginTop:4}}>🗑</button>
                       </div>
                     </div>
@@ -2318,7 +2368,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   {aiHabitsLoading?<span>Analizando<span className="dots"><span/><span/><span/></span></span>:isCacheExpired(aiHabitsTs)||!aiHabits?"⚡ ACTUALIZAR":"✓ LISTO"}
                 </button>
                 {aiHabitsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{fmtCacheAge(aiHabitsTs)}</span>}
-                {aiHabits&&!aiHabitsLoading&&<button className="btn-sm" onClick={()=>{setAiHabits(null);setAiHabitsTs(null);storageSet("v8_cache_aihabits","");}} style={{fontSize:"8px",background:"#1a1a22",color:"#8888a8",border:"1px solid #2a2a38"}}>↻</button>}
+                {aiHabits&&!aiHabitsLoading&&<button className="btn-sm" onClick={()=>{setAiHabits(null);setAiHabitsTs(null);if(user)setAiCache(user.id,"ai_habits",null).catch(()=>{});}} style={{fontSize:"8px",background:"#1a1a22",color:"#8888a8",border:"1px solid #2a2a38"}}>↻</button>}
               </div>
             </div>
             {/* AI Habits */}
@@ -2491,7 +2541,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   {weekInsightsLoading?<span>ANALIZANDO <span className="dots"><span/><span/><span/></span></span>:isCacheExpired(weekInsightsTs)||!weekInsights?"🧠 ANALIZAR PATRONES (14 días)":"✓ ANALIZADO"}
                 </button>
                 {weekInsightsTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",whiteSpace:"nowrap"}}>{fmtCacheAge(weekInsightsTs)}</span>}
-                {weekInsights && !weekInsightsLoading && <button className="btn-sm" onClick={()=>{setWeekInsights(null);setWeekInsightsTs(null);storageSet("v8_cache_weekinsights","");}} style={{flexShrink:0,fontSize:"8px"}}>↻</button>}
+                {weekInsights && !weekInsightsLoading && <button className="btn-sm" onClick={()=>{setWeekInsights(null);setWeekInsightsTs(null);if(user)setAiCache(user.id,"week_insights",null).catch(()=>{});}} style={{flexShrink:0,fontSize:"8px"}}>↻</button>}
               </div>
               {weekInsights && !weekInsights.error && (
                 <div className="fade-in">
@@ -2612,7 +2662,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   </div>
                   <button className="btn" style={{width:"100%",marginTop:10}} onClick={()=>{
                     if(favForm.name) {
-                      saveFavs([...favs,{...favForm,id:Date.now(),calories:Number(favForm.calories),protein:Number(favForm.protein),carbs:Number(favForm.carbs),fats:Number(favForm.fats)}]);
+                      const nf2={...favForm,id:Date.now(),calories:Number(favForm.calories),protein:Number(favForm.protein),carbs:Number(favForm.carbs),fats:Number(favForm.fats)}; saveFavs([...favs,nf2],nf2.id);
                       setFavForm({name:"",calories:0,protein:0,carbs:0,fats:0}); setShowFavForm(false);
                     }
                   }}>✓ GUARDAR</button>
@@ -2626,7 +2676,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                         <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13}}>{f.name}</div>
                         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>{f.calories}kcal · {f.protein}g P · {f.carbs}g C · {f.fats}g F</div>
                       </div>
-                      <button onClick={()=>saveFavs(favs.filter(x=>x.id!==f.id))} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
+                      <button onClick={()=>deleteFavorite(f.id).catch(()=>{}); saveFavs(favs.filter(x=>x.id!==f.id))} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
                     </div>
                   ))
               }
