@@ -1319,11 +1319,82 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             ))}
           </div>
+          </div>
+          </div>
         )}
 
         {/* ══ SEMANA ══ */}
         {tab==="semana" && (
           <div>
+
+
+            {/* ── Status Banner 7 días ── */}
+            {(()=>{
+              const _d7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
+              const _ld7 = _d7.filter(d=>(log[d]||[]).length>0);
+              const _ae7 = _d7.flatMap(d=>log[d]||[]);
+              const avg7 = _ld7.length>0 ? {
+                calories: Math.round(_ae7.reduce((s,e)=>s+(e.calories||0),0)/_ld7.length),
+                protein:  Math.round(_ae7.reduce((s,e)=>s+(e.protein||0),0)/_ld7.length),
+                carbs:    Math.round(_ae7.reduce((s,e)=>s+(e.carbs||0),0)/_ld7.length),
+                fats:     Math.round(_ae7.reduce((s,e)=>s+(e.fats||0),0)/_ld7.length),
+              } : null;
+              const _gc7 = {A:0,B:0,C:0,D:0,F:0};
+              _ae7.forEach(e=>{ if(e.grade&&_gc7[e.grade]!==undefined) _gc7[e.grade]++; });
+              const _tot7 = Object.values(_gc7).reduce((s,v)=>s+v,0);
+              const abPct7 = _tot7>0 ? Math.round((_gc7.A+_gc7.B)/_tot7*100) : null;
+              const dfPct7 = _tot7>0 ? Math.round((_gc7.D+_gc7.F)/_tot7*100) : null;
+              if(!avg7) return null;
+              const bColor = abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d";
+              return (
+                <div className="card fade-in" style={{marginBottom:20,borderLeft:`3px solid ${bColor}`,borderRadius:"0 4px 4px 0",background:abPct7>=70?"rgba(61,220,132,.04)":abPct7>=50?"rgba(255,184,48,.04)":"rgba(255,77,77,.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:12}}>
+                    <div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:bColor,letterSpacing:".15em",marginBottom:4}}>
+                        {abPct7>=70?"✅ SEMANA EN PROTOCOLO":abPct7>=50?"⚠ SEMANA PARCIAL":"🔴 SEMANA FUERA DE PROTOCOLO"}
+                      </div>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16}}>
+                        Promedio 7 días · {_ld7.length} días con registro
+                      </div>
+                    </div>
+                    {abPct7!==null && (
+                      <div style={{textAlign:"center",background:"#1a1a22",borderRadius:3,padding:"8px 16px"}}>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,color:bColor,lineHeight:1}}>{abPct7}%</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>comidas A+B</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="g4">
+                    {MACRO_KEYS.map(k=>{
+                      const real=avg7[k]; const meta=targets[k];
+                      const pct=Math.round(real/meta*100);
+                      const c=pct>=90&&pct<=115?"#3ddc84":pct>=75?"#ffb830":"#ff4d4d";
+                      const delta=real-meta;
+                      return (
+                        <div key={k} style={{background:"#131318",borderRadius:3,padding:"10px 8px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:3,letterSpacing:".08em"}}>{MACRO_CFG[k].label.toUpperCase()}</div>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{real}<span style={{fontSize:11,color:"#44445a"}}>{MACRO_CFG[k].unit}</span></div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:c,marginTop:3}}>
+                            {pct}% meta · {delta>0?"+":""}{delta}{MACRO_CFG[k].unit}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {avg7.protein < targets.protein*0.8 && (
+                    <div className="ins ir" style={{marginTop:10}}>
+                      ⚠ Proteína promedio <strong>{avg7.protein}g</strong> — {targets.protein-avg7.protein}g bajo meta. Prioriza proteína magra en cada comida principal.
+                    </div>
+                  )}
+                  {dfPct7>25 && (
+                    <div className="ins ir" style={{marginTop:8}}>
+                      ⚠ <strong>{dfPct7}%</strong> de las comidas esta semana fueron D/F. Revisa el Hall of Shame en ANÁLISIS.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Aggregate stats */}
             <div className="sec-h">Acumulados por Período</div>
             <div className="g3" style={{marginBottom:20}}>
@@ -2088,68 +2159,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
           return (
           <div>
-            {/* ── Status Banner 7 días ── */}
-            {avg7 && (
-              <div className="card fade-in" style={{marginBottom:20,borderLeft:`3px solid ${abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d"}`,borderRadius:"0 4px 4px 0",background:abPct7>=70?"rgba(61,220,132,.04)":abPct7>=50?"rgba(255,184,48,.04)":"rgba(255,77,77,.04)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:10}}>
-                  <div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d",letterSpacing:".15em",marginBottom:4}}>
-                      {abPct7>=70?"✅ SEMANA EN PROTOCOLO":abPct7>=50?"⚠ SEMANA PARCIAL":"🔴 SEMANA FUERA DE PROTOCOLO"}
-                    </div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16}}>
-                      Promedio últimos 7 días · {loggedDays7.length} días con registro
-                    </div>
-                  </div>
-                  {abPct7!==null && (
-                    <div style={{textAlign:"center",background:"#1a1a22",borderRadius:3,padding:"8px 16px"}}>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,color:abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d",lineHeight:1}}>{abPct7}%</div>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>comidas A+B</div>
-                    </div>
-                  )}
-                </div>
-                <div className="g4">
-                  {MACRO_KEYS.map(k=>{
-                    const real=avg7[k]; const meta=targets[k];
-                    const pct=Math.round(real/meta*100);
-                    const c=pct>=90&&pct<=115?"#3ddc84":pct>=75?"#ffb830":"#ff4d4d";
-                    const delta=real-meta;
-                    return (
-                      <div key={k} style={{background:"#131318",borderRadius:3,padding:"10px 8px",textAlign:"center"}}>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:3,letterSpacing:".08em"}}>{MACRO_CFG[k].label.toUpperCase()}</div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{real}<span style={{fontSize:11,color:"#44445a"}}>{MACRO_CFG[k].unit}</span></div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:c,marginTop:3}}>
-                          {pct}% meta · {delta>0?"+":""}{delta}{MACRO_CFG[k].unit}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {avg7.protein < targets.protein*0.8 && (
-                  <div className="ins ir" style={{marginTop:10}}>
-                    ⚠ Proteína promedio <strong>{avg7.protein}g</strong> — {targets.protein-avg7.protein}g por debajo de meta. Prioriza batido proteico o pollo/atún en cada comida principal.
-                  </div>
-                )}
-                {dfPct7>25 && (
-                  <div className="ins ir" style={{marginTop:10}}>
-                    ⚠ <strong>{dfPct7}%</strong> de las comidas esta semana fueron D/F. Revisa el Hall of Shame en ANÁLISIS.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Dynamic Insights ── */}
-            {insights.length>0 && (
-              <div style={{marginBottom:20}}>
-                <div className="sec-h">Insights — Basados en tu Data</div>
-                {insights.map((ins,i)=>(
-                  <div key={i} className={`ins ${ins.type==="good"?"ig":ins.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
-                    <strong>{ins.icon} {ins.title}</strong>
-                    <div style={{marginTop:4,fontWeight:400}}>{ins.text}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* ── Macro targets ── */}
             <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
             <div className="g4" style={{marginBottom:20}}>
@@ -2326,6 +2335,34 @@ Analiza este día y responde SOLO JSON sin backticks:
         {/* ══ ANÁLISIS ══ */}
         {tab==="analisis" && (
           <div>
+
+            {/* ── Alertas Automáticas (sin API) ── */}
+            {(()=>{
+              const _d14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
+              const _e14 = _d14.flatMap(d=>log[d]||[]);
+              const _ld14 = _d14.filter(d=>(log[d]||[]).length>0).length;
+              const avgP14 = _ld14>0?Math.round(_e14.reduce((s,e)=>s+(e.protein||0),0)/_ld14):0;
+              const avgK14 = _ld14>0?Math.round(_e14.reduce((s,e)=>s+(e.calories||0),0)/_ld14):0;
+              const abPct14 = _e14.length>0?Math.round(_e14.filter(e=>e.grade==="A"||e.grade==="B").length/_e14.length*100):0;
+              const alerts = [];
+              if(avgP14>0 && avgP14<targets.protein*0.85) alerts.push({type:"warn",icon:"💪",title:"Proteína insuficiente",text:`Promedio ${avgP14}g/día vs meta ${targets.protein}g. Agrega fuente proteica en snack y post-entreno.`});
+              if(avgK14>0 && avgK14>targets.calories*1.12) alerts.push({type:"warn",icon:"⚡",title:"Exceso calórico sostenido",text:`Promedio ${avgK14} kcal vs meta ${targets.calories} (${avgK14-targets.calories} kcal extra/día). Revisa las cenas.`});
+              if(abPct14>0 && abPct14<50) alerts.push({type:"bad",icon:"📊",title:"Calidad nutricional baja",text:`Solo ${abPct14}% de comidas en A/B (14 días). Impacta LDL, HbA1c y recomposición.`});
+              if(abPct14>=70) alerts.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de recomposición.`});
+              if(alerts.length===0) return null;
+              return (
+                <div style={{marginBottom:20}}>
+                  <div className="sec-h">Alertas Automáticas</div>
+                  {alerts.map((a,i)=>(
+                    <div key={i} className={`ins ${a.type==="good"?"ig":a.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
+                      <strong>{a.icon} {a.title}</strong>
+                      <div style={{marginTop:4,fontWeight:400}}>{a.text}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {/* AI Analysis CTA */}
 
             {/* Divider */}
@@ -2459,6 +2496,13 @@ Analiza este día y responde SOLO JSON sin backticks:
                 {i.txt}
               </div>
             ))}
+          </div>
+          </div>
+        )}
+
+        {/* ══ CONFIG ══ */}
+        {tab==="config" && (
+          <div>
             <div className="sec-h">Objetivos Nutricionales</div>
             <div className="card" style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
