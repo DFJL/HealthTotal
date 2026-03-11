@@ -3014,10 +3014,11 @@ Analiza este día y responde SOLO JSON sin backticks:
               ))}
             </div>
 
-            {/* ── Plan de Referencia ── */}
+            {/* ── Plan de Referencia — solo si hay datos AI o log ── */}
+            {Object.keys(log).length > 0 && (<>
             <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
             <p style={{fontSize:12,color:"#44445a",marginBottom:14,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".06em"}}>
-              PLANTILLA BASE CLÍNICA · REFERENCIA DE MACROS Y ALIMENTOS
+              PLANTILLA BASE · USA LA IA EN HÁBITOS PARA UN PLAN PERSONALIZADO
             </p>
             {PLAN_MEALS.map(m=>(
               <div key={m.name} className="card" style={{marginBottom:12,borderLeft:`3px solid ${m.highlight?"#a8ff3e":"#2a2a38"}`,borderRadius:"0 4px 4px 0"}}>
@@ -3061,18 +3062,18 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               </div>
             </div>
+            </>)}
 
             {/* ── Próximos pasos clínicos ── */}
             <div className="sec-h">Próximos Pasos Clínicos</div>
             <div className="card">
               {[
-                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días es el mayor driver para reducirla`},
-                lastInbody && lastInbody.m<38.5 && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg (meta ≥38.5kg) — priorizar proteína post-entreno y consistencia en entrenos de fuerza`},
-                avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína crónico (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
-                {icon:"📅",text:"Repetir HbA1c en Mayo 2026. Si ≥6.0%, manejo médico inmediato"},
-                {icon:"🔬",text:"Pedir ferritina + hierro sérico + TIBC en próximo panel (microcitosis VCM 72–75)"},
-                {icon:"📊",text:"Check InBody cada 6–8 semanas para medir progreso de recomposición"},
-                {icon:"💊",text:"Evaluar con médico ajuste de rosuvastatina si LDL no baja de 100 mg/dL"},
+                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días`},
+                lastInbody && lastInbody.m < (targets.protein/2) && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg — priorizar proteína post-entreno`},
+                avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
+                labResults.length>0 && labResults[labResults.length-1]?.hba1c>=5.7 && {icon:"🩺",text:`HbA1c ${labResults[labResults.length-1]?.hba1c}% — caminar 15 min post-almuerzo y reducir carbos simples`},
+                {icon:"📊",text:"Check InBody cada 6–8 semanas para medir progreso"},
+                labResults.length===0 && {icon:"🔬",text:"Agrega tus resultados de laboratorio en la sección LABS para recomendaciones personalizadas"},
               ].filter(Boolean).map((item,i)=>(
                 <div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid rgba(42,42,56,.4)",alignItems:"flex-start"}}>
                   <span style={{fontSize:18,flexShrink:0}}>{item.icon}</span>
@@ -3148,9 +3149,14 @@ Analiza este día y responde SOLO JSON sin backticks:
                   <strong>💡 Hábitos con IA</strong>
                   Presiona "ACTUALIZAR" para que la IA analice tu log reciente y genere hábitos personalizados a tus marcadores y patrones de alimentación actuales.
                 </div>
-                <div className="sec-h">Hábitos Base — Protocolo 2026</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Protocolo de hábitos personalizado generado por IA según tu progreso actual.</p>
-                {HABITS.map((h,i)=>(
+                <div style={{textAlign:"center",padding:"32px 0",color:"#44445a"}}>
+                  <div style={{fontSize:36,marginBottom:12}}>🤖</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,marginBottom:8,color:"#44445a"}}>Sin hábitos generados aún</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>
+                    Registra al menos 3 días de comidas<br/>y presiona ACTUALIZAR para generar<br/>hábitos personalizados con IA.
+                  </div>
+                </div>
+                {false && HABITS.map((h,i)=>(
                   <div key={i} style={{display:"flex",gap:16,alignItems:"flex-start",background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,padding:"16px 18px",marginBottom:10}}>
                     <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{h.icon}</div>
                     <div style={{flex:1}}>
@@ -3319,21 +3325,16 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             <div style={{borderTop:"1px solid #2a2a38",margin:"24px 0"}}/>
 
-            {/* Static section — always visible */}
-            <div className="sec-h">Alertas Clínicas — Baseline</div>
-            {INSIGHTS.filter(i=>i.lvl!=="g").map(i=>(
-              <div key={i.title} className={`ins i${i.lvl}`}>
-                <strong>{i.icon} {i.title}</strong>
-                {i.txt}
+            {/* Prompt to generate AI insights if none yet */}
+            {!weekInsights && !weekInsightsLoading && (
+              <div style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
+                <div style={{fontSize:32,marginBottom:10}}>🧠</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,color:"#44445a",marginBottom:6}}>Sin análisis generado aún</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>
+                  Presiona "ANALIZAR PATRONES" arriba<br/>para generar insights personalizados con IA.
+                </div>
               </div>
-            ))}
-            <div className="sec-h">Resultados Positivos</div>
-            {INSIGHTS.filter(i=>i.lvl==="g").map(i=>(
-              <div key={i.title} className="ins ig">
-                <strong>{i.icon} {i.title}</strong>
-                {i.txt}
-              </div>
-            ))}
+            )}
           </div>
         )}
 
