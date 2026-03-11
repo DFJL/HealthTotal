@@ -347,6 +347,8 @@ function AppInner() {
   const [routineInput, setRoutineInput] = useState("");
   const [routineLoading, setRoutineLoading] = useState(false);
   const [generatedRoutine, setGeneratedRoutine] = useState(null);
+  const [routineTs, setRoutineTs] = useState(null);
+  const [savedRoutines, setSavedRoutines] = useState([]);
   const [aiHabits, setAiHabits] = useState(null);
   const [aiHabitsLoading, setAiHabitsLoading] = useState(false);
   const [aiHabitsTs, setAiHabitsTs] = useState(null);
@@ -410,6 +412,9 @@ function AppInner() {
         const [rWI, rAH] = await Promise.all([storageGet("v8_cache_weekinsights"), storageGet("v8_cache_aihabits")]);
         if (rWI?.value) { const c=JSON.parse(rWI.value); setWeekInsights(c.data); setWeekInsightsTs(c.ts); }
         if (rAH?.value) { const c=JSON.parse(rAH.value); setAiHabits(c.data); setAiHabitsTs(c.ts); }
+        const [rRT, rSR] = await Promise.all([storageGet("v8_cache_routine"), storageGet("v8_saved_routines")]);
+        if (rRT?.value) { const c=JSON.parse(rRT.value); setGeneratedRoutine(c.data); setRoutineTs(c.ts); }
+        if (rSR?.value) setSavedRoutines(JSON.parse(rSR.value));
       } catch(e) { console.error(e); }
       finally { setLoaded(true); }
     })();
@@ -594,19 +599,44 @@ function AppInner() {
     if (!routineInput.trim()) return;
     setRoutineLoading(true); setGeneratedRoutine(null);
     try {
+      // Build user profile from actual state
+      const lastIB = allInbody[allInbody.length-1];
+      const d14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
+      const e14 = d14.flatMap(d=>log[d]||[]);
+      const ld14 = d14.filter(d=>(log[d]||[]).length>0).length;
+      const avgP = ld14>0?Math.round(e14.reduce((s,e)=>s+(e.protein||0),0)/ld14):0;
+      const avgK = ld14>0?Math.round(e14.reduce((s,e)=>s+(e.calories||0),0)/ld14):0;
+      const profile = [
+        lastIB ? `InBody: ${lastIB.w}kg, ${lastIB.f}% grasa, ${lastIB.m}kg músculo, grasa visceral ${lastIB.vi}` : "Sin datos InBody",
+        `Nutrición 14d: ${avgP}g proteína/día, ${avgK} kcal/día (meta: ${targets.protein}g P, ${targets.calories} kcal)`,
+        `Labs: LDL ${144} mg/dL (meta<100), HbA1c 5.9% (meta<5.7%), toma rosuvastatina`,
+        `Equipo: DB 10/25/30lbs, KB 24kg, chaleco lastrado 15lbs, bandas, barras calistenia parque`,
+        `Objetivos: recomposición corporal, reducir grasa visceral, mejorar marcadores cardiovasculares`,
+      ].join(". ");
       const res = await fetch("/api/analyze",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4096,messages:[{role:"user",content:`Eres un entrenador experto. Genera rutina personalizada para Felipe: 39a, 82.8kg, 19% grasa, 38.5kg músculo, recomposición. Equipo: DB 10/25/30lbs, KB 24kg, chaleco 15lbs, bandas, barras parque.
-Solicitud: "${routineInput}"
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4096,messages:[{role:"user",content:`Eres entrenador y nutricionista deportivo experto. Genera rutina personalizada con este perfil del usuario:
+${profile}
+Solicitud específica: "${routineInput}"
 Responde ÚNICAMENTE con este JSON (sin texto extra, sin backticks, sin markdown):
 {"title":"string","description":"string","days":[{"day":"LUNES","type":"PUSH","exercises":[{"name":"string","sets":"3x10","notes":"string"}]}],"notes":"string"}
-Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 8 palabras.`}]})
+Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 10 palabras. Adapta la intensidad al perfil de salud del usuario.`}]})
       });
       if (!res.ok) { const err = await res.text(); throw new Error(`API ${res.status}: ${err.slice(0,200)}`); }
       const data = await res.json();
       const txt = data.content?.map(i=>i.text||"").join("")||"";
-      setGeneratedRoutine(extractJSON(txt));
+      const routine = extractJSON(txt);
+      setGeneratedRoutine(routine);
+      const ts = Date.now();
+      setRoutineTs(ts);
+      await storageSet("v8_cache_routine", JSON.stringify({ts, data:routine}));
+      // Auto-save to history
+      if (!routine.error) {
+        const newSaved = [{...routine, savedAt:ts, request:routineInput}, ...savedRoutines].slice(0,5);
+        setSavedRoutines(newSaved);
+        await storageSet("v8_saved_routines", JSON.stringify(newSaved));
+      }
     } catch(e) {
       setGeneratedRoutine({error:`Error: ${e.message}`});
     }
@@ -1395,6 +1425,8 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* Aggregate stats */}
             <div className="sec-h">Acumulados por Período</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Tus promedios, gráficas de macros y distribución de calidad nutricional.</p>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Registra tus comidas del día — texto, foto o ambos. El AI analiza cada entrada.</p>
             <div className="g3" style={{marginBottom:20}}>
               {[
                 {label:"Esta semana",days:7},
@@ -1420,24 +1452,42 @@ Analiza este día y responde SOLO JSON sin backticks:
               })}
             </div>
 
-            {/* Grade distribution */}
-            <div className="sec-h">Distribución de Calidad Nutricional</div>
+            {/* Calidad + Estadísticas fusionadas */}
+            <div className="sec-h">Calidad & Estadísticas del Log</div>
             <div className="card" style={{marginBottom:20}}>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-                {Object.entries(gradeCounts).map(([g,cnt])=>(
-                  <div key={g} style={{flex:1,minWidth:60,background:"#1a1a22",borderRadius:3,padding:"10px 8px",textAlign:"center",borderTop:`2px solid ${gradeColor(g)}`}}>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,color:gradeColor(g),lineHeight:1}}>{g}</div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,marginTop:4}}>{cnt}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>{totalEntries>0?Math.round(cnt/totalEntries*100):0}%</div>
+              {/* Grade % grandes + counts pequeños */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+                {Object.entries(gradeCounts).map(([g,cnt])=>{
+                  const pct = totalEntries>0?Math.round(cnt/totalEntries*100):0;
+                  return (
+                    <div key={g} style={{flex:1,minWidth:56,background:"#1a1a22",borderRadius:3,padding:"12px 8px",textAlign:"center",borderTop:`2px solid ${gradeColor(g)}`}}>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:gradeColor(g),lineHeight:1}}>{pct}<span style={{fontSize:14,color:"#44445a"}}>%</span></div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:3,letterSpacing:".08em"}}>{g} · {cnt}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Totals row */}
+              <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+                {[
+                  {l:"Total registros",v:totalEntries,c:"#a8ff3e"},
+                  {l:"A+B (calidad)",v:`${totalEntries>0?Math.round((gradeCounts.A+gradeCounts.B)/totalEntries*100):0}%`,c:"#3ddc84"},
+                  {l:"LDL+ positivo",v:allEntries.filter(e=>e.ldl_impact==="positivo").length,c:"#4dc8ff"},
+                  {l:"Con alerta",v:allEntries.filter(e=>e.alerta&&e.alerta!=="null"&&e.alerta!==null).length,c:"#ffb830"},
+                ].map(x=>(
+                  <div key={x.l} style={{flex:1,minWidth:80,background:"#131318",borderRadius:3,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:x.c,lineHeight:1}}>{x.v}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:3,letterSpacing:".06em"}}>{x.l}</div>
                   </div>
                 ))}
               </div>
-              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              {/* LDL/HbA1c impact */}
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",borderTop:"1px solid #2a2a38",paddingTop:12}}>
                 {[
-                  {label:"Impacto positivo LDL",count:allEntries.filter(e=>e.ldl_impact==="positivo").length,color:"#3ddc84"},
-                  {label:"Impacto negativo LDL",count:allEntries.filter(e=>e.ldl_impact==="negativo").length,color:"#ff4d4d"},
-                  {label:"Positivo HbA1c",count:allEntries.filter(e=>e.hba1c_impact==="positivo").length,color:"#3ddc84"},
-                  {label:"Negativo HbA1c",count:allEntries.filter(e=>e.hba1c_impact==="negativo").length,color:"#ff4d4d"},
+                  {label:"LDL positivo",count:allEntries.filter(e=>e.ldl_impact==="positivo").length,color:"#3ddc84"},
+                  {label:"LDL negativo",count:allEntries.filter(e=>e.ldl_impact==="negativo").length,color:"#ff4d4d"},
+                  {label:"HbA1c positivo",count:allEntries.filter(e=>e.hba1c_impact==="positivo").length,color:"#3ddc84"},
+                  {label:"HbA1c negativo",count:allEntries.filter(e=>e.hba1c_impact==="negativo").length,color:"#ff4d4d"},
                 ].map(({label,count,color})=>(
                   <div key={label} style={{display:"flex",alignItems:"center",gap:6,fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>
                     <span className="grade-dot" style={{background:color}}/>{label}: <strong style={{color}}>{count}</strong>
@@ -1445,6 +1495,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 ))}
               </div>
             </div>
+
 
             {/* 14-day macro charts */}
             <div className="sec-h">Macros — 14 días</div>
@@ -1515,21 +1566,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* ── CHEAT DAY ANALYZER ── */}
 
-            <div className="sec-h">Estadísticas del Log Nutricional</div>
-            <div className="g4" style={{marginBottom:20}}>
-              {[
-                {l:"Total Comidas",v:totalEntries,u:"registros",c:"#a8ff3e"},
-                {l:"Grade A+B",v:gradeCounts.A+gradeCounts.B,u:`de ${totalEntries}`,c:"#3ddc84"},
-                {l:"Impacto + LDL",v:allEntries.filter(e=>e.ldl_impact==="positivo").length,u:"comidas",c:"#4dc8ff"},
-                {l:"Alertas",v:allEntries.filter(e=>e.alerta&&e.alerta!=="null"&&e.alerta!==null).length,u:"comidas",c:"#ffb830"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
-                  <div className="lbl">{x.l}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:38,color:x.c,lineHeight:1}}>{x.v}</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>{x.u}</div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
@@ -1538,6 +1574,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           <div>
             {/* ─── BODY PHOTOS + INBODY UPLOAD ─── */}
             <div className="sec-h">Registro Visual & InBody</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Fotos de progreso, historial InBody y evolución de composición corporal.</p>
             <div className="card" style={{marginBottom:14}}>
               <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
                 {/* Foto de progreso */}
@@ -1791,6 +1828,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           <div>
             {/* Upload new labs */}
             <div className="sec-h">Agregar Nuevos Resultados de Laboratorio</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Resultados de laboratorio: lípidos, glucosa, hemograma y marcadores clave.</p>
             <div className="card" style={{marginBottom:20}}>
               <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
                 Sube una foto de tu resultado de laboratorio y la IA extraerá automáticamente todos los valores disponibles.
@@ -1985,6 +2023,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           <div>
             {/* AI Routine Generator */}
             <div className="sec-h">Generador de Rutina con IA</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Genera rutinas con IA basadas en tu perfil real. Guarda tu historial.</p>
             <div className="card" style={{marginBottom:20}}>
               <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
                 Describe lo que necesitas y la IA generará una rutina personalizada basada en tu equipo y objetivos actuales.
@@ -1992,9 +2031,12 @@ Analiza este día y responde SOLO JSON sin backticks:
               <textarea value={routineInput} onChange={e=>setRoutineInput(e.target.value)}
                 placeholder="Ej: Quiero una rutina de 4 días enfocada en mejorar las piernas y reducir grasa visceral. Tengo 45 min por sesión. Incluye más trabajo de cardio en intervalos."
                 rows={4} className="inp" style={{resize:"vertical",marginBottom:10}}/>
-              <button className="btn" style={{width:"100%",marginBottom:generatedRoutine?14:0}} onClick={generateRoutine} disabled={routineLoading||!routineInput.trim()}>
-                {routineLoading?<span>GENERANDO RUTINA <span className="dots"><span/><span/><span/></span></span>:"⚡ GENERAR RUTINA CON IA"}
-              </button>
+              <div style={{display:"flex",gap:8,marginBottom:generatedRoutine?14:0}}>
+                <button className="btn" style={{flex:1}} onClick={generateRoutine} disabled={routineLoading||!routineInput.trim()}>
+                  {routineLoading?<span>GENERANDO <span className="dots"><span/><span/><span/></span></span>:"⚡ GENERAR RUTINA CON IA"}
+                </button>
+                {routineTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",alignSelf:"center",whiteSpace:"nowrap"}}>{fmtCacheAge(routineTs)}</span>}
+              </div>
               {generatedRoutine?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{generatedRoutine.error}</div>}
               {generatedRoutine && !generatedRoutine.error && (
                 <div className="fade-in">
@@ -2028,6 +2070,31 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               )}
             </div>
+
+            {/* ── Rutinas Guardadas ── */}
+            {savedRoutines.length>0 && (
+              <div style={{marginBottom:20}}>
+                <div className="sec-h">Rutinas Guardadas</div>
+                <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Últimas rutinas generadas. Toca para volver a cargar.</p>
+                {savedRoutines.map((r,i)=>(
+                  <div key={r.savedAt||i} className="card" style={{marginBottom:8,cursor:"pointer",borderLeft:"3px solid #2a2a38",borderRadius:"0 4px 4px 0",padding:"12px 14px"}}
+                    onClick={()=>{setGeneratedRoutine(r); setRoutineInput(r.request||"");}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,marginBottom:3}}>{r.title}</div>
+                        {r.request && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",lineHeight:1.4}}>"{r.request.slice(0,80)}{r.request.length>80?"...":""}"</div>}
+                      </div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",flexShrink:0,textAlign:"right"}}>
+                        {r.savedAt ? fmtCacheAge(r.savedAt) : ""}
+                        <button onClick={e=>{e.stopPropagation();const ns=savedRoutines.filter((_,j)=>j!==i);setSavedRoutines(ns);storageSet("v8_saved_routines",JSON.stringify(ns));}}
+                          style={{display:"block",background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:12,marginTop:4}}>🗑</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
 
 
             <div className="sec-h">Semana Tipo — Push / Pull / Legs</div>
@@ -2159,6 +2226,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           <div>
             {/* ── Macro targets ── */}
             <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Plan de referencia, metas de macros por tipo de día y suplementación.</p>
             <div className="g4" style={{marginBottom:20}}>
               {MACRO_KEYS.map(k=>(
                 <div key={k} className="card" style={{borderTop:`2px solid ${MACRO_CFG[k].color}`}}>
@@ -2311,6 +2379,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   Presiona "ACTUALIZAR" para que la IA analice tu log reciente y genere hábitos personalizados a tus marcadores actuales (LDL 124, HbA1c 5.90%) y patrones de alimentación.
                 </div>
                 <div className="sec-h">Hábitos Base — Protocolo 2026</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Protocolo de hábitos personalizado generado por IA según tu progreso actual.</p>
                 {HABITS.map((h,i)=>(
                   <div key={i} style={{display:"flex",gap:16,alignItems:"flex-start",background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,padding:"16px 18px",marginBottom:10}}>
                     <div style={{fontSize:26,flexShrink:0,marginTop:2}}>{h.icon}</div>
@@ -2351,6 +2420,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               return (
                 <div style={{marginBottom:20}}>
                   <div className="sec-h">Alertas Automáticas</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Insights automáticos, Hall of Fame/Shame y análisis profundo con IA.</p>
                   {alerts.map((a,i)=>(
                     <div key={i} className={`ins ${a.type==="good"?"ig":a.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
                       <strong>{a.icon} {a.title}</strong>
@@ -2501,6 +2571,7 @@ Analiza este día y responde SOLO JSON sin backticks:
         {tab==="config" && (
           <div>
             <div className="sec-h">Objetivos Nutricionales</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Ajusta tus objetivos de macros, gestiona favoritos y haz backup de tu data.</p>
             <div className="card" style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <span style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700}}>Macros diarios</span>
