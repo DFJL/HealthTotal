@@ -3056,7 +3056,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             <div className="card">
               {[
                 lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días`},
-                lastInbody && lastInbody.m < (targets.protein/2) && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg — priorizar proteína post-entreno`},
+                lastInbody && lastInbody.m != null && lastInbody.m < (targets.muscleGoal||39) && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg — meta ${targets.muscleGoal||39}kg, priorizar proteína post-entreno`},
                 avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
                 labResults.length>0 && labResults[labResults.length-1]?.hba1c>=5.7 && {icon:"🩺",text:`HbA1c ${labResults[labResults.length-1]?.hba1c}% — caminar 15 min post-almuerzo y reducir carbos simples`},
                 {icon:"📊",text:"Check InBody cada 6–8 semanas para medir progreso"},
