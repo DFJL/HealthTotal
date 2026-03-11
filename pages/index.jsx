@@ -813,6 +813,7 @@ Analiza este día y responde SOLO JSON sin backticks:
     return (2000+parseInt(m[2]))*100+(months[m[1]]??0);
   };
   const allInbody = [...INBODY, ...customInbody].sort((a,b)=>parseInbodyDate(a.d)-parseInbodyDate(b.d));
+  const lastInbody = allInbody[allInbody.length-1] || null;
 
   // ─── SMART NOTIFICATIONS (all deps available here) ───
   const notifications = loaded ? (() => {
@@ -2196,7 +2197,6 @@ Analiza este día y responde SOLO JSON sin backticks:
           const avgKcal14   = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.calories||0),0)/loggedDays14) : 0;
           const abCount14   = entries14.filter(e=>e.grade==="A"||e.grade==="B").length;
           const abPct14     = entries14.length>0 ? Math.round(abCount14/entries14.length*100) : 0;
-          const lastInbody  = allInbody[allInbody.length-1];
           const prevInbody  = allInbody.length>1 ? allInbody[allInbody.length-2] : null;
           const muscleGain  = lastInbody && prevInbody ? (lastInbody.m - prevInbody.m).toFixed(1) : null;
 
