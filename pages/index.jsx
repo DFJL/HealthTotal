@@ -381,6 +381,8 @@ function AppInner() {
   const [favForm, setFavForm] = useState({name:"",calories:0,protein:0,carbs:0,fats:0});
   const [showFavForm, setShowFavForm] = useState(false);
   const [exportJson, setExportJson] = useState(null);
+  const [importJson, setImportJson] = useState(null);
+  const [importText, setImportText] = useState("");
   const [editTargets, setEditTargets] = useState(false);
   const [tmpTargets, setTmpTargets]   = useState(TARGETS_DEF);
   const [dragOver, setDragOver] = useState(false);
@@ -927,18 +929,20 @@ Analiza este día y responde SOLO JSON sin backticks:
   const importData = e => {
     const f=e.target.files[0]; if(!f) return;
     const r=new FileReader();
-    r.onload=ev=>{
-      try {
-        const d=JSON.parse(ev.target.result);
-        if(d.log) saveLog(d.log);
-        if(d.favs) saveFavs(d.favs);
-        if(d.targets) saveTargets(d.targets);
-        if(d.customInbody) saveCustomInbody(d.customInbody);
-        if(d.customLabs) saveCustomLabs(d.customLabs);
-        alert("✓ Datos restaurados. Las fotos de progreso se guardan solo localmente y no se incluyen en el backup.");
-      } catch { alert("Error al importar el archivo"); }
-    };
+    r.onload=ev=>{ setImportText(ev.target.result); setImportJson(true); };
     r.readAsText(f);
+  };
+  const applyImport = (txt) => {
+    try {
+      const d=JSON.parse(txt);
+      if(d.log) saveLog(d.log);
+      if(d.favs) saveFavs(d.favs);
+      if(d.targets) saveTargets(d.targets);
+      if(d.customInbody) saveCustomInbody(d.customInbody);
+      if(d.customLabs) saveCustomLabs(d.customLabs);
+      setImportJson(null); setImportText("");
+      alert("✓ Datos restaurados correctamente.");
+    } catch { alert("JSON inválido — revisa el formato e intenta de nuevo."); }
   };
 
   const latestLab = LABS_HIST[LABS_HIST.length-1];
@@ -2701,12 +2705,38 @@ Analiza este día y responde SOLO JSON sin backticks:
               <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(61,220,132,.08)",color:"#3ddc84",border:"1px solid rgba(61,220,132,.3)"}} onClick={exportData}>
                 ⬇ EXPORTAR BACKUP COMPLETO (.JSON)
               </button>
-              <button className="btn" style={{width:"100%",background:"rgba(77,200,255,.08)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>backupRef.current.click()}>
-                ⬆ RESTAURAR BACKUP (.JSON)
+              <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(77,200,255,.08)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>{setImportText("");setImportJson(true);}}>
+                ⬆ RESTAURAR — PEGAR JSON
+              </button>
+              <button className="btn" style={{width:"100%",background:"rgba(77,200,255,.04)",color:"#44445a",border:"1px solid #1e1e2a",fontSize:10}} onClick={()=>backupRef.current.click()}>
+                ⬆ RESTAURAR — SUBIR ARCHIVO
               </button>
             </div>
           </div>
         )}
+
+
+      {/* ══ IMPORT MODAL ══ */}
+      {importJson && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setImportJson(null)}>
+          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#e8e8f0",marginBottom:6}}>RESTAURAR BACKUP</div>
+            <div style={{fontSize:10,color:"#44445a",marginBottom:12,lineHeight:1.6}}>Pega el JSON copiado desde el backup o desde la consola del navegador.</div>
+            <textarea
+              value={importText}
+              onChange={e=>setImportText(e.target.value)}
+              placeholder='{"log":{...},"favs":[...]}'
+              style={{flex:1,minHeight:220,background:"#0c0c0f",border:"1px solid #2a2a38",borderRadius:4,color:"#e8e8f0",fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:12,resize:"vertical",outline:"none",marginBottom:12}}
+            />
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn" style={{flex:1,background:"rgba(77,200,255,.12)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>applyImport(importText)}>
+                ✓ RESTAURAR
+              </button>
+              <button className="btn-sm" onClick={()=>setImportJson(null)}>CANCELAR</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ EXPORT MODAL ══ */}
       {exportJson && (
