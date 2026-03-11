@@ -2676,7 +2676,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                         <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13}}>{f.name}</div>
                         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>{f.calories}kcal · {f.protein}g P · {f.carbs}g C · {f.fats}g F</div>
                       </div>
-                      <button onClick={()=>deleteFavorite(f.id).catch(()=>{}); saveFavs(favs.filter(x=>x.id!==f.id))} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
+                      <button onClick={()=>{deleteFavorite(f.id).catch(()=>{}); saveFavs(favs.filter(x=>x.id!==f.id));}} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
                     </div>
                   ))
               }
