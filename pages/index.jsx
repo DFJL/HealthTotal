@@ -956,20 +956,9 @@ function AppInner() {
           getBodyMeasurements(user.id).catch(() => []),
           getLabResults(user.id).catch(() => []),
         ]);
-        // Seed body measurements if empty
-        if (dbMeasurements.length === 0) {
-          insertBodyMeasurementsBatch(user.id, SEED_INBODY).catch(console.error);
-          setBodyMeasurements(SEED_INBODY);
-        } else {
-          setBodyMeasurements(dbMeasurements);
-        }
-        // Seed lab results if empty
-        if (dbLabs.length === 0) {
-          insertLabResultsBatch(user.id, SEED_LABS).catch(console.error);
-          setLabResults(SEED_LABS);
-        } else {
-          setLabResults(dbLabs);
-        }
+        // Never auto-seed body/lab data — each user starts clean
+        setBodyMeasurements(dbMeasurements);
+        setLabResults(dbLabs);
         // Auto-create profile if trigger didn't fire
         const profile = profileResult || await upsertProfile(user.id, {
           name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario',
