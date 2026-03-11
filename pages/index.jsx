@@ -714,6 +714,123 @@ function ProfileEditor({ userProfile, onSave }) {
   );
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// METABOLIC SCORE ENGINE
+// Returns { score:0-100, grade, indicators[], components[] }
+// All inputs optional — score adjusts to available data
+// ─────────────────────────────────────────────────────────────
+function calcMetabolicScore(labResults=[], allInbody=[], log={}, targets={}) {
+  const lab  = labResults[labResults.length-1] || null;
+  const body = allInbody[allInbody.length-1]   || null;
+
+  let totalWeight = 0, totalScore = 0;
+  const components = [];
+  const indicators = [];
+
+  // ── 1. Glucosa / Insulina (30%) ──
+  if (lab?.hba1c != null || lab?.glucose != null) {
+    let pts = 100;
+    const hba1c   = lab?.hba1c;
+    const glucose = lab?.glucose;
+    if (hba1c   != null) pts = Math.min(pts, hba1c   <= 5.4 ? 100 : hba1c <= 5.7 ? 80 : hba1c <= 6.0 ? 55 : hba1c <= 6.5 ? 30 : 10);
+    if (glucose != null) pts = Math.min(pts, glucose  < 90   ? 100 : glucose < 100 ? 80 : glucose < 110 ? 55 : glucose < 126 ? 30 : 10);
+    // HOMA-IR if insulin available
+    const insulin = lab?.insulin;
+    if (insulin != null && glucose != null) {
+      const homa = (glucose * insulin) / 405;
+      pts = Math.min(pts, homa < 1.0 ? 100 : homa < 1.5 ? 85 : homa < 2.0 ? 65 : homa < 2.5 ? 45 : 20);
+      components.push({ label:"HOMA-IR", value:homa.toFixed(2), target:"<1.5", status: homa<1.5?"ok":homa<2.5?"warn":"bad", weight:10 });
+      indicators.push({ label:"HOMA-IR", value:homa.toFixed(2), status: homa<1.5?"ok":homa<2.5?"warn":"bad" });
+    }
+    totalScore  += pts * 0.30; totalWeight += 0.30;
+    if (hba1c != null) {
+      components.push({ label:"HbA1c", value:`${hba1c}%`, target:"<5.7%", status: hba1c<=5.7?"ok":hba1c<=6.0?"warn":"bad", weight:15 });
+      indicators.push({ label:"HBA1C", value:`${hba1c}%`, status: hba1c<=5.7?"ok":hba1c<=6.0?"warn":"bad" });
+    }
+    if (glucose != null) {
+      components.push({ label:"Glucosa", value:`${glucose} mg/dL`, target:"<100", status: glucose<100?"ok":glucose<110?"warn":"bad", weight:15 });
+    }
+  }
+
+  // ── 2. Perfil Lipídico (25%) ──
+  if (lab?.ldl != null || lab?.hdl != null || lab?.tg != null) {
+    let pts = 100;
+    const ldl = lab?.ldl, hdl = lab?.hdl, tg = lab?.tg;
+    if (ldl != null) pts = Math.min(pts, ldl < 100 ? 100 : ldl < 130 ? 75 : ldl < 160 ? 45 : 20);
+    if (hdl != null) pts = Math.min(pts, hdl > 60  ? 100 : hdl > 50  ? 85 : hdl > 40  ? 60 : 30);
+    if (tg  != null) pts = Math.min(pts, tg  < 100 ? 100 : tg  < 150 ? 80 : tg  < 200 ? 50 : 20);
+    // TG/HDL ratio
+    if (tg != null && hdl != null && hdl > 0) {
+      const ratio = +(tg / hdl).toFixed(2);
+      const rStatus = ratio < 1.5 ? "ok" : ratio < 2.5 ? "warn" : "bad";
+      components.push({ label:"TG/HDL", value:ratio.toFixed(1), target:"<1.5", status:rStatus, weight:10 });
+      indicators.push({ label:"TG/HDL", value:ratio.toFixed(1), status:rStatus });
+    }
+    totalScore  += pts * 0.25; totalWeight += 0.25;
+    if (ldl != null) {
+      components.push({ label:"LDL", value:`${ldl} mg/dL`, target:"<100", status: ldl<100?"ok":ldl<130?"warn":"bad", weight:10 });
+      indicators.push({ label:"LDL", value:`${ldl}`, status: ldl<100?"ok":ldl<130?"warn":"bad" });
+    }
+    if (hdl != null) components.push({ label:"HDL", value:`${hdl} mg/dL`, target:">60", status: hdl>60?"ok":hdl>40?"warn":"bad", weight:8 });
+  }
+
+  // ── 3. Composición Corporal (25%) ──
+  if (body) {
+    let pts = 100;
+    const fat = body.f, muscle = body.m, weight = body.w;
+    if (fat    != null) pts = Math.min(pts, fat < 12  ? 100 : fat < 18  ? 85 : fat < 25  ? 60 : fat < 30  ? 35 : 15);
+    if (muscle != null && weight != null) {
+      const smmi = muscle / ((body.h||170)/100)**2; // skeletal muscle mass index approx
+      pts = Math.min(pts, smmi > 10 ? 100 : smmi > 8.5 ? 85 : smmi > 7 ? 65 : 40);
+    }
+    totalScore += pts * 0.25; totalWeight += 0.25;
+    if (fat != null) {
+      components.push({ label:"% Grasa", value:`${fat}%`, target:"<18%", status: fat<18?"ok":fat<25?"warn":"bad", weight:13 });
+      indicators.push({ label:"GRASA", value:`${fat}%`, status: fat<18?"ok":fat<25?"warn":"bad" });
+    }
+    if (muscle != null) components.push({ label:"Músculo", value:`${muscle} kg`, target:"↑", status:"ok", weight:12 });
+  }
+
+  // ── 4. Adherencia Nutricional (20%) ──
+  const logDays = Object.keys(log);
+  if (logDays.length >= 3) {
+    const last14 = logDays.slice(-14);
+    const proteinDays = last14.filter(d => {
+      const entries = log[d] || [];
+      const totalProt = entries.reduce((a,e)=>a+(e.protein||0),0);
+      return targets.protein ? totalProt >= targets.protein * 0.85 : totalProt >= 120;
+    });
+    const streak = (()=>{
+      let s = 0;
+      const today = new Date();
+      for (let i=0; i<14; i++) {
+        const d = new Date(today); d.setDate(d.getDate()-i);
+        const key = d.toISOString().split("T")[0];
+        if (log[key]?.length > 0) s++; else break;
+      }
+      return s;
+    })();
+    const adherence = Math.round((proteinDays.length / last14.length) * 100);
+    const adherenceStatus = adherence >= 80 ? "ok" : adherence >= 60 ? "warn" : "bad";
+    const streakStatus    = streak >= 7 ? "ok" : streak >= 3 ? "warn" : "bad";
+    const pts = (adherence * 0.7) + (Math.min(streak, 14) / 14 * 100 * 0.3);
+    totalScore += pts * 0.20; totalWeight += 0.20;
+    components.push({ label:"Adherencia proteína", value:`${adherence}%`, target:">80%", status:adherenceStatus, weight:10 });
+    components.push({ label:"Racha de registro", value:`${streak} días`, target:"≥7 días", status:streakStatus, weight:10 });
+    indicators.push({ label:"ADHERENCIA", value:`${adherence}%`, status:adherenceStatus });
+    indicators.push({ label:"RACHA", value:`${streak}d`, status:streakStatus });
+  }
+
+  if (totalWeight === 0) return null; // no data at all
+
+  // Normalize to available data weight
+  const normalizedScore = Math.round(totalScore / totalWeight);
+  const grade = normalizedScore >= 80 ? "A" : normalizedScore >= 65 ? "B" : normalizedScore >= 50 ? "C" : normalizedScore >= 35 ? "D" : "F";
+
+  return { score: Math.min(100, Math.max(0, normalizedScore)), grade, components, indicators };
+}
+
 const USER_PROFILE_DEFAULT = {
   name: "Usuario",
   equipment: ["Mancuernas 10/25/30 lbs","KB 24kg","Chaleco lastrado 15 lbs","Bandas elásticas","Barras calistenia parque","Cuerda de saltar"],
@@ -1450,7 +1567,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   const latestLab = labResults[labResults.length-1];
   const MODULES = [
     {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
-    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"]]},
+    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"],["score","SCORE"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
   ];
@@ -1570,6 +1687,63 @@ Analiza este día y responde SOLO JSON sin backticks:
           </div>
         )}
       </div>
+
+      {/* ── METABOLIC SCORE STRIP ── */}
+      {(()=>{
+        const ms = calcMetabolicScore(labResults, allInbody, log, targets);
+        if (!ms) return null;
+        const scoreColor = ms.score >= 80 ? "#3ddc84" : ms.score >= 60 ? "#ffb830" : "#ff4d4d";
+        return (
+          <div onClick={()=>setTab("score")} style={{
+            display:"flex",alignItems:"center",gap:0,
+            background:"#0e0e14",borderBottom:"1px solid #2a2a38",
+            cursor:"pointer",overflowX:"auto",scrollbarWidth:"none",
+          }}>
+            {/* Score badge */}
+            <div style={{
+              display:"flex",alignItems:"center",gap:10,
+              padding:"10px 20px",borderRight:"1px solid #2a2a38",flexShrink:0,
+            }}>
+              <div style={{
+                width:36,height:36,borderRadius:"50%",flexShrink:0,
+                background:`conic-gradient(${scoreColor} ${ms.score*3.6}deg, #1a1a22 0deg)`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+                <div style={{
+                  width:26,height:26,borderRadius:"50%",background:"#0e0e14",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:10,color:scoreColor,
+                }}>{ms.score}</div>
+              </div>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".15em"}}>SCORE</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:12,color:scoreColor}}>
+                  {ms.score>=80?"ÓPTIMO":ms.score>=65?"BUENO":ms.score>=50?"MODERADO":"ATENCIÓN"}
+                </div>
+              </div>
+            </div>
+            {/* Indicators */}
+            {ms.indicators.map((ind,i)=>(
+              <div key={i} style={{
+                padding:"10px 16px",borderRight:"1px solid #1a1a22",flexShrink:0,
+                display:"flex",flexDirection:"column",gap:2,
+              }}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",whiteSpace:"nowrap"}}>{ind.label}</div>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,
+                    color:ind.status==="ok"?"#3ddc84":ind.status==="warn"?"#ffb830":"#ff4d4d",
+                    whiteSpace:"nowrap"
+                  }}>{ind.value}</span>
+                  <span style={{fontSize:10}}>{ind.status==="ok"?"✓":ind.status==="warn"?"↑":"⚠"}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{padding:"10px 14px",flexShrink:0,marginLeft:"auto"}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>VER DETALLE →</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODULE NAV (top) ── */}
       <div style={{display:"flex",borderBottom:"1px solid #2a2a38",background:"#0c0c0f",position:"sticky",top:0,zIndex:50,overflowX:"auto",scrollbarWidth:"none"}}>
@@ -3163,6 +3337,157 @@ Analiza este día y responde SOLO JSON sin backticks:
         )}
 
         {/* ══ CONFIG ══ */}
+        {tab==="score" && (()=>{
+          const ms = calcMetabolicScore(labResults, allInbody, log, targets);
+          const lab  = labResults[labResults.length-1] || null;
+          const body = allInbody[allInbody.length-1]   || null;
+          const scoreColor = !ms ? "#44445a" : ms.score>=80?"#3ddc84":ms.score>=65?"#ffb830":ms.score>=50?"#ff9940":"#ff4d4d";
+          const statusLabel = !ms?"SIN DATOS":ms.score>=80?"ÓPTIMO":ms.score>=65?"BUENO":ms.score>=50?"MODERADO":"ATENCIÓN";
+
+          return (
+          <div className="fade-in" style={{padding:"28px 24px",maxWidth:700,margin:"0 auto"}}>
+
+            {/* ── Big Score ── */}
+            <div style={{display:"flex",alignItems:"center",gap:24,marginBottom:28}}>
+              <div style={{position:"relative",width:96,height:96,flexShrink:0}}>
+                <svg viewBox="0 0 96 96" style={{width:96,height:96,transform:"rotate(-90deg)"}}>
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="#1a1a22" strokeWidth="8"/>
+                  {ms && <circle cx="48" cy="48" r="40" fill="none" stroke={scoreColor} strokeWidth="8"
+                    strokeDasharray={`${ms.score*2.513} 251.3`} strokeLinecap="round"/>}
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:scoreColor,lineHeight:1}}>{ms?.score ?? "—"}</span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em"}}>/ 100</span>
+                </div>
+              </div>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:4}}>METABOLIC HEALTH SCORE</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:scoreColor,lineHeight:1,marginBottom:6}}>{statusLabel}</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
+                  {ms ? `Basado en ${ms.components.length} indicadores disponibles` : "Agrega labs e InBody para calcular tu score"}
+                </div>
+              </div>
+            </div>
+
+            {ms && (<>
+
+            {/* ── Components breakdown ── */}
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:10}}>DESGLOSE POR COMPONENTE</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+              {ms.components.map((comp,i)=>{
+                const cColor = comp.status==="ok"?"#3ddc84":comp.status==="warn"?"#ffb830":"#ff4d4d";
+                const barPct = comp.status==="ok"?85+Math.random()*15:comp.status==="warn"?50+Math.random()*20:15+Math.random()*25;
+                return (
+                  <div key={i} style={{background:"#131318",border:"1px solid #2a2a38",borderRadius:4,padding:"12px 16px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:cColor,flexShrink:0}}/>
+                        <span style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:13,color:"#e8e8f0"}}>{comp.label}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:cColor}}>{comp.value}</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>meta: {comp.target}</span>
+                      </div>
+                    </div>
+                    <div style={{height:3,background:"#1a1a22",borderRadius:2}}>
+                      <div style={{height:3,background:cColor,borderRadius:2,width:`${Math.min(100,barPct)}%`,transition:"width 1s ease"}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Advanced metrics ── */}
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:10}}>MÉTRICAS AVANZADAS</div>
+            <div className="g2" style={{gap:8,marginBottom:24}}>
+              {/* TG/HDL */}
+              {lab?.tg && lab?.hdl && (()=>{
+                const ratio = +(lab.tg/lab.hdl).toFixed(2);
+                const st = ratio<1.5?"ok":ratio<2.5?"warn":"bad";
+                const col = st==="ok"?"#3ddc84":st==="warn"?"#ffb830":"#ff4d4d";
+                return (
+                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>TG / HDL RATIO</div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{ratio}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
+                      {ratio<1.5?"✓ Excelente — bajo riesgo CV":ratio<2.5?"↑ Moderado — meta <1.5":"⚠ Alto — riesgo cardiometabólico"}
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>TG {lab.tg} · HDL {lab.hdl}</div>
+                  </div>
+                );
+              })()}
+              {/* HOMA-IR */}
+              {lab?.glucose && lab?.insulin ? (()=>{
+                const homa = +((lab.glucose * lab.insulin)/405).toFixed(2);
+                const st = homa<1.5?"ok":homa<2.5?"warn":"bad";
+                const col = st==="ok"?"#3ddc84":st==="warn"?"#ffb830":"#ff4d4d";
+                return (
+                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>HOMA-IR</div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{homa}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
+                      {homa<1.0?"✓ Sensibilidad insulínica óptima":homa<1.5?"✓ Normal":homa<2.5?"↑ Resistencia leve — meta <1.5":"⚠ Resistencia a insulina"}
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>Glucosa {lab.glucose} · Insulina {lab.insulin}</div>
+                  </div>
+                );
+              })() : (
+                <div style={{background:"#131318",border:"1px solid #2a2a38",borderRadius:4,padding:"14px 16px",opacity:.5}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>HOMA-IR</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#44445a"}}>—</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>Requiere glucosa + insulina en ayunas</div>
+                </div>
+              )}
+              {/* Protein adequacy */}
+              {body && (()=>{
+                const logDays = Object.keys(log).slice(-7);
+                if (!logDays.length) return null;
+                const avgProt = Math.round(logDays.reduce((a,d)=>a+(log[d]||[]).reduce((s,e)=>s+(e.protein||0),0),0)/logDays.length);
+                const ratio = body.w ? +(avgProt/body.w).toFixed(2) : null;
+                const st = !ratio?"ok":ratio>=1.6?"ok":ratio>=1.2?"warn":"bad";
+                const col = st==="ok"?"#4dc8ff":st==="warn"?"#ffb830":"#ff4d4d";
+                return (
+                  <div style={{background:"#131318",border:`1px solid ${col}22`,borderRadius:4,padding:"14px 16px"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>PROTEÍNA / KG · PROM 7D</div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:col}}>{ratio ?? "—"}<span style={{fontSize:14,fontWeight:400,color:"#44445a"}}> g/kg</span></div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
+                      {!ratio?"Sin datos":ratio>=1.6?"✓ Óptimo para recomposición":ratio>=1.2?"↑ Adecuado — meta 1.6–2.2 g/kg":"⚠ Bajo — aumenta proteína diaria"}
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>Prom {avgProt}g/d · Peso {body.w}kg</div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── Wearables coming soon ── */}
+            <div style={{background:"rgba(168,255,62,.03)",border:"1px dashed rgba(168,255,62,.15)",borderRadius:4,padding:"16px",marginBottom:24}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".2em",marginBottom:6}}>PRÓXIMAMENTE — WEARABLES</div>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                {["⌚ Apple Watch","💚 Garmin","⚫ Whoop","💍 Oura"].map(w=>(
+                  <span key={w} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:12,color:"#44445a",background:"#1a1a22",padding:"4px 10px",borderRadius:3}}>{w}</span>
+                ))}
+              </div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:8}}>
+                Sueño · HRV · Resting HR · Actividad física → enriquecerán el Score Metabólico
+              </div>
+            </div>
+
+            </>)}
+
+            {!ms && (
+              <div style={{textAlign:"center",padding:"40px 0"}}>
+                <div style={{fontSize:40,marginBottom:12}}>🧬</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:18,color:"#44445a",marginBottom:8}}>Sin datos suficientes</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",lineHeight:1.7}}>
+                  Agrega resultados de laboratorio en la sección LABS<br/>
+                  o registra tu InBody en CUERPO para activar el Score.
+                </div>
+              </div>
+            )}
+          </div>
+          );
+        })()}
+
         {tab==="config" && (
           <div>
             <div className="sec-h">Perfil de Usuario</div>
