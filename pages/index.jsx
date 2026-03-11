@@ -154,7 +154,7 @@ const INITIAL_LOG = {
 };
 
 // ── HELPERS ──
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const calcMacros = foods => foods.reduce(
   (a,f) => ({calories:a.calories+(f.calories||0),protein:a.protein+(f.protein||0),carbs:a.carbs+(f.carbs||0),fats:a.fats+(f.fats||0)}),
   {calories:0,protein:0,carbs:0,fats:0}
@@ -450,13 +450,14 @@ function AppInner() {
   const navDay = dir => {
     const d = new Date(selDate+"T12:00:00");
     d.setDate(d.getDate()+dir);
-    const nd = d.toISOString().split("T")[0];
+    const nd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     if (nd <= todayStr()) setSelDate(nd);
   };
   const fmtDate = d => {
     if (d===todayStr()) return "Hoy";
     const y=new Date(); y.setDate(y.getDate()-1);
-    if (d===y.toISOString().split("T")[0]) return "Ayer";
+    const yStr=`${y.getFullYear()}-${String(y.getMonth()+1).padStart(2,'0')}-${String(y.getDate()).padStart(2,'0')}`;
+    if (d===yStr) return "Ayer";
     return new Date(d+"T12:00:00").toLocaleDateString("es-CR",{weekday:"short",day:"numeric",month:"short"});
   };
 
@@ -701,7 +702,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   // ── Weekly data ──
   const weekData = Array.from({length:14},(_,i) => {
     const d = new Date(); d.setDate(d.getDate()-(13-i));
-    const k = d.toISOString().split("T")[0];
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const entries = log[k]||[];
     const grades = entries.map(e=>e.grade||"C");
     const gradeScore = grades.reduce((a,g)=>a+(g==="A"?4:g==="B"?3:g==="C"?2:g==="D"?1:0),0)/(grades.length||1);
@@ -727,7 +728,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   const notifications = loaded ? (() => {
     const notifs = [];
     const today = todayStr();
-    const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
+    const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
     const days3 = days7.slice(0,3);
 
     const lastLoggedDay = days7.find(d=>(log[d]||[]).length>0);
@@ -1016,7 +1017,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               <div className="cal-strip">
                 {Array.from({length:14},(_,i)=>{
                   const d=new Date(); d.setDate(d.getDate()-(13-i));
-                  const k=d.toISOString().split("T")[0];
+                  const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
                   const cnt=(log[k]||[]).length;
                   const isSelected=k===selDate;
                   return (
@@ -1332,7 +1333,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 {label:"Todo el registro",days:365},
               ].map(({label,days})=>{
                 const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
-                const cutoffStr = cutoff.toISOString().split("T")[0];
+                const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`;
                 const entries = Object.entries(log).filter(([d])=>d>=cutoffStr).flatMap(([,e])=>e);
                 const m = calcMacros(entries);
                 const avgKcal = entries.length>0?Math.round(m.calories/Math.min(days,Object.keys(log).filter(d=>d>=cutoffStr&&(log[d]||[]).length>0).length||1)):0;
@@ -1446,6 +1447,22 @@ Analiza este día y responde SOLO JSON sin backticks:
             {/* ── CHEAT DAY ANALYZER ── */}
 
           </div>
+
+            <div className="sec-h">Estadísticas del Log Nutricional</div>
+            <div className="g4" style={{marginBottom:20}}>
+              {[
+                {l:"Total Comidas",v:totalEntries,u:"registros",c:"#a8ff3e"},
+                {l:"Grade A+B",v:gradeCounts.A+gradeCounts.B,u:`de ${totalEntries}`,c:"#3ddc84"},
+                {l:"Impacto + LDL",v:allEntries.filter(e=>e.ldl_impact==="positivo").length,u:"comidas",c:"#4dc8ff"},
+                {l:"Alertas",v:allEntries.filter(e=>e.alerta&&e.alerta!=="null"&&e.alerta!==null).length,u:"comidas",c:"#ffb830"},
+              ].map(x=>(
+                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
+                  <div className="lbl">{x.l}</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:38,color:x.c,lineHeight:1}}>{x.v}</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>{x.u}</div>
+                </div>
+              ))}
+            </div>
         )}
 
         {/* ══ CUERPO ══ */}
@@ -1582,7 +1599,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                         {Array.from({length:4},(_,wi)=>{
                           const wEnd=new Date(); wEnd.setDate(wEnd.getDate()-wi*7);
                           const wStart=new Date(wEnd); wStart.setDate(wStart.getDate()-6);
-                          const wDates=Array.from({length:7},(_,di)=>{const d=new Date(wStart);d.setDate(d.getDate()+di);return d.toISOString().split("T")[0];});
+                          const wDates=Array.from({length:7},(_,di)=>{const d=new Date(wStart);d.setDate(d.getDate()+di);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;});
                           const wEntries=wDates.flatMap(d=>log[d]||[]);
                           const wLoggedDays=wDates.filter(d=>(log[d]||[]).length>0).length;
                           if(wLoggedDays===0) return null;
@@ -2030,7 +2047,7 @@ Analiza este día y responde SOLO JSON sin backticks:
         {/* ══ GUÍA ══ */}
         {tab==="guia" && (()=>{
           // ── 7-day stats ──
-          const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
+          const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
           const loggedDays7 = days7.filter(d=>(log[d]||[]).length>0);
           const allEntries7 = days7.flatMap(d=>log[d]||[]);
           const avg7 = loggedDays7.length>0 ? {
@@ -2046,7 +2063,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           const dfPct7 = totalGraded7>0 ? Math.round((gradeCount7.D+gradeCount7.F)/totalGraded7*100) : null;
 
           // ── 14-day trend insights ──
-          const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
+          const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
           const entries14 = days14.flatMap(d=>log[d]||[]);
           const loggedDays14 = days14.filter(d=>(log[d]||[]).length>0).length;
           const avgProtein14 = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.protein||0),0)/loggedDays14) : 0;
@@ -2317,7 +2334,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             {/* ── HALL OF FAME & SHAME ── */}
             {(() => {
               const all14 = Object.entries(log)
-                .filter(([d])=>{ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14); return d>=cutoff.toISOString().split("T")[0]; })
+                .filter(([d])=>{ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14); return d>=`${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`; })
                 .flatMap(([d,entries])=>entries.map(e=>({...e,date:d})));
               if(all14.length<3) return null;
               const scored = all14.map(e=>({
@@ -2443,48 +2460,6 @@ Analiza este día y responde SOLO JSON sin backticks:
                 {i.txt}
               </div>
             ))}
-            <div className="sec-h">Correlación & Progreso Histórico</div>
-            <div className="card" style={{marginBottom:20}}>
-              <div className="lbl" style={{marginBottom:14}}>Impacto del estilo de vida en marcadores</div>
-              {[
-                {l:"Colesterol Total (Ago→Feb 2026)",v:"318→208 mg/dL · −34.6%",p:92,c:"#3ddc84"},
-                {l:"Triglicéridos (Nov→Feb 2026)",v:"178→113 mg/dL · −36.5%",p:75,c:"#3ddc84"},
-                {l:"Ratio Col/HDL (Ago→Feb 2026)",v:"4.8→3.4 · −29%",p:68,c:"#4dc8ff"},
-                {l:"LDL restante hasta meta",v:"124→100 mg/dL · −24 restantes",p:45,c:"#ffb830"},
-                {l:"HbA1c (Ago→Feb 2026)",v:"5.80→5.90% · ↑ leve · monitorear",p:22,c:"#ffb830"},
-                {l:"% Grasa corporal (Nov→Feb)",v:"20.6→19.0% · −1.6 pts",p:45,c:"#3ddc84"},
-                {l:"Masa muscular (2019→Feb 2026)",v:"32.2→38.5 kg · +6.3 kg total",p:85,c:"#a8ff3e"},
-              ].map(x=>(
-                <div key={x.l} className="prog-bar-wrap">
-                  <div className="prog-bar-h">
-                    <span style={{color:"#8888a8",fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>{x.l}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:x.c}}>{x.v}</span>
-                  </div>
-                  <div className="prog-bar-t"><div className="prog-bar-f" style={{width:`${x.p}%`,background:x.c}}/></div>
-                </div>
-              ))}
-            </div>
-            <div className="sec-h">Estadísticas del Log Nutricional</div>
-            <div className="g4" style={{marginBottom:20}}>
-              {[
-                {l:"Total Comidas",v:totalEntries,u:"registros",c:"#a8ff3e"},
-                {l:"Grade A+B",v:gradeCounts.A+gradeCounts.B,u:`de ${totalEntries}`,c:"#3ddc84"},
-                {l:"Impacto + LDL",v:allEntries.filter(e=>e.ldl_impact==="positivo").length,u:"comidas",c:"#4dc8ff"},
-                {l:"Alertas",v:allEntries.filter(e=>e.alerta&&e.alerta!=="null"&&e.alerta!==null).length,u:"comidas",c:"#ffb830"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
-                  <div className="lbl">{x.l}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:38,color:x.c,lineHeight:1}}>{x.v}</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>{x.u}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ══ CONFIG ══ */}
-        {tab==="config" && (
-          <div>
             <div className="sec-h">Objetivos Nutricionales</div>
             <div className="card" style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
