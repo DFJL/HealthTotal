@@ -864,7 +864,7 @@ function AppInner() {
   const [tab, setTab] = useState("hoy");
   const [targets, setTargets] = useState(TARGETS_DEF);
   const [log, setLog]     = useState({});
-  const [favs, setFavs]   = useState(INITIAL_FAVS);
+  const [favs, setFavs]   = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selDate, setSelDate] = useState(todayStr());
@@ -993,7 +993,7 @@ function AppInner() {
         } else {
           setLog({}); // new user starts with empty log — never seed INITIAL_LOG
         }
-        if (favsData.length > 0) setFavs(favsData);
+        setFavs(favsData); // always use DB data, even if empty
         if (photos.length > 0)   setBodyPhotos(photos);
         if (profile?.dismissed_notifs) setDismissedNotifs(profile.dismissed_notifs);
         const [wiCache, ahCache, rtCache, srCache] = await Promise.all([
