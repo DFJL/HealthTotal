@@ -310,6 +310,16 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 @media(max-width:520px){.g3,.g2{grid-template-columns:1fr;}.g7{grid-template-columns:1fr 1fr;}}
 `;
 
+
+const USER_PROFILE_DEFAULT = {
+  name: "Usuario",
+  equipment: ["Mancuernas 10/25/30 lbs","KB 24kg","Chaleco lastrado 15 lbs","Bandas elásticas","Barras calistenia parque","Cuerda de saltar"],
+  supplements: ["Vitamina D3 2000-5000 UI (mañana)","Vitamina C 500-1000mg (mañana)","Zinc 15-25mg (mañana)","Omega-3 2-4g EPA+DHA (mañana)","Creatina 5g (post-entreno)","Whey isolate 30g (post-entreno)","Magnesio glicinato 400mg (noche)","Rosuvastatina (con cena)"],
+  goals: "Recomposición corporal, reducir grasa visceral, mejorar LDL y HbA1c",
+  health_notes: "LDL meta <100 mg/dL, HbA1c meta <5.7%, toma rosuvastatina",
+  session_duration: "45-60 min",
+  training_days: 5,
+};
 function AppInner() {
   const [tab, setTab] = useState("hoy");
   const [targets, setTargets] = useState(TARGETS_DEF);
@@ -343,6 +353,7 @@ function AppInner() {
   const [labsResult, setLabsResult]   = useState(null);
   const [labsB64, setLabsB64] = useState(null);
   const [customLabs, setCustomLabs] = useState([]);
+  const [userProfile, setUserProfile] = useState(USER_PROFILE_DEFAULT);
   // AI Routine generator
   const [routineInput, setRoutineInput] = useState("");
   const [routineLoading, setRoutineLoading] = useState(false);
@@ -412,9 +423,10 @@ function AppInner() {
         const [rWI, rAH] = await Promise.all([storageGet("v8_cache_weekinsights"), storageGet("v8_cache_aihabits")]);
         if (rWI?.value) { const c=JSON.parse(rWI.value); setWeekInsights(c.data); setWeekInsightsTs(c.ts); }
         if (rAH?.value) { const c=JSON.parse(rAH.value); setAiHabits(c.data); setAiHabitsTs(c.ts); }
-        const [rRT, rSR] = await Promise.all([storageGet("v8_cache_routine"), storageGet("v8_saved_routines")]);
+        const [rRT, rSR, rUP] = await Promise.all([storageGet("v8_cache_routine"), storageGet("v8_saved_routines"), storageGet("v8_user_profile")]);
         if (rRT?.value) { const c=JSON.parse(rRT.value); setGeneratedRoutine(c.data); setRoutineTs(c.ts); }
         if (rSR?.value) setSavedRoutines(JSON.parse(rSR.value));
+        if (rUP?.value) setUserProfile(JSON.parse(rUP.value));
       } catch(e) { console.error(e); }
       finally { setLoaded(true); }
     })();
@@ -490,7 +502,7 @@ function AppInner() {
       const content = [];
       if (aiB64) content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:aiB64}});
       if (aiInput) content.push({type:"text",text:aiInput});
-      content.push({type:"text",text:`Analiza este alimento. Perfil: LDL 124 mg/dL (meta<100), HbA1c 5.90% (meta<5.7%), 82.8 kg 19% grasa, recomposición corporal activa, TMB 1817 kcal, toma rosuvastatina. Tiempo de comida: ${selMeal}. Tipo de día: ${selDayType}. Responde SOLO JSON sin backticks:\n{"name":"string","calories":number,"protein":number,"carbs":number,"fats":number,"grade":"A/B/C/D/F","score":number,"meal":"${selMeal}","dayType":"${selDayType}","ldl_impact":"positivo/neutro/negativo","hba1c_impact":"positivo/neutro/negativo","notes":"tip personalizado breve","alerta":"alerta o null"}`});
+      content.push({type:"text",text:`Analiza este alimento. Perfil del usuario: ${[lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa`:"sin InBody", userProfile.health_notes, userProfile.goals].filter(Boolean).join(". ")}. Meta kcal/día: ${targets.calories}, proteína: ${targets.protein}g. Tiempo de comida: ${selMeal}. Tipo de día: ${selDayType}. Responde SOLO JSON sin backticks:\n{"name":"string","calories":number,"protein":number,"carbs":number,"fats":number,"grade":"A/B/C/D/F","score":number,"meal":"${selMeal}","dayType":"${selDayType}","ldl_impact":"positivo/neutro/negativo","hba1c_impact":"positivo/neutro/negativo","notes":"tip personalizado breve","alerta":"alerta o null"}`});
       const res = await fetch("/api/analyze",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -609,9 +621,9 @@ function AppInner() {
       const profile = [
         lastIB ? `InBody: ${lastIB.w}kg, ${lastIB.f}% grasa, ${lastIB.m}kg músculo, grasa visceral ${lastIB.vi}` : "Sin datos InBody",
         `Nutrición 14d: ${avgP}g proteína/día, ${avgK} kcal/día (meta: ${targets.protein}g P, ${targets.calories} kcal)`,
-        `Labs: LDL ${144} mg/dL (meta<100), HbA1c 5.9% (meta<5.7%), toma rosuvastatina`,
-        `Equipo: DB 10/25/30lbs, KB 24kg, chaleco lastrado 15lbs, bandas, barras calistenia parque`,
-        `Objetivos: recomposición corporal, reducir grasa visceral, mejorar marcadores cardiovasculares`,
+        `Labs: ${userProfile.health_notes}`,
+        `Equipo: ${userProfile.equipment.join(", ")}`,
+        `Objetivos: ${userProfile.goals}. Duración sesión: ${userProfile.session_duration}`,
       ].join(". ");
       const res = await fetch("/api/analyze",{
         method:"POST",
@@ -654,7 +666,7 @@ Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 10 pa
         : "Sin entradas recientes en el log";
       const res = await fetch("/api/analyze",{
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4096,messages:[{role:"user",content:`Eres coach de salud. Felipe: 39a, LDL 124 (meta<100), HbA1c 5.90% (meta<5.7%), 19% grasa (meta 15-16%), músculo 38.5kg. Suplementos: Rosuvastatina noche, Creatina, Omega-3, D3, Zn, Mg.
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4096,messages:[{role:"user",content:`Eres coach de salud integral. Perfil del usuario: ${lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa, ${lastInbody.m}kg músculo`:"sin datos InBody"}. ${userProfile.health_notes}. Suplementos actuales: ${userProfile.supplements.slice(0,5).join(", ")}.
 Log reciente (${allEntries.length} comidas): ${summary.slice(0,800)}
 Genera 5 hábitos personalizados y adaptativos basados en los patrones del log.
 Responde ÚNICAMENTE con este JSON (sin texto extra, sin backticks):
@@ -684,7 +696,7 @@ Máximo 5 hábitos. Descripción máximo 20 palabras cada una.`}]})
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:`
-Analiza el log nutricional de Felipe (39 años, objetivo recomposición corporal, LDL meta<100 mg/dL, HbA1c meta<5.7%):
+Analiza el log nutricional del usuario. Perfil: ${lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa, ${lastInbody.m}kg músculo`:""} ${userProfile.health_notes}. Objetivos: ${userProfile.goals}.
 ${summary}
 
 Responde SOLO JSON sin backticks:
@@ -834,6 +846,8 @@ Analiza este día y responde SOLO JSON sin backticks:
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
 
 
+  const saveUserProfile = async (p) => { setUserProfile(p); await storageSet("v8_user_profile", JSON.stringify(p)); };
+
   const fmtCacheAge = ts => {
     if (!ts) return null;
     const mins = Math.round((Date.now()-ts)/60000);
@@ -871,49 +885,21 @@ Analiza este día y responde SOLO JSON sin backticks:
             FELIPE <span style={{color:"#a8ff3e"}}>JIMÉNEZ</span>
           </div>
           <div style={{display:"flex",gap:24,marginTop:14,flexWrap:"wrap"}}>
-            {[["82.8 kg","Peso"],["38.5 kg","Músculo"],["19.0%","Grasa"],["1,817","TMB kcal"]].map(([v,l])=>(
-              <div key={l} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>
-                <strong style={{display:"block",fontSize:"14px",color:"#e8e8f0",marginBottom:1,fontFamily:"'Syne',sans-serif",fontWeight:700}}>{v}</strong>{l}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:88,fontWeight:800,lineHeight:.9,color:"#a8ff3e"}}>86</div>
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".18em",textTransform:"uppercase",color:"#8888a8",marginTop:6}}>InBody Score / 100</div>
-          </div>
-          <div style={{display:"flex",gap:6}}>
-            <button className="btn-sm" onClick={exportData}>⬇ BACKUP</button>
-            <button className="btn-sm" onClick={()=>backupRef.current.click()}>⬆ RESTORE</button>
-            <input ref={backupRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
-          </div>
-        </div>
-      </div>
-
-
-      {/* ── LABS ALERTS BAR (always visible) ── */}
-      <div style={{background:"rgba(255,77,77,.03)",borderBottom:"1px solid rgba(255,77,77,.08)",padding:"6px 44px",display:"flex",gap:24,flexWrap:"wrap"}}>
-        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#ff4d4d"}}>⚠ LDL {latestLab.ldl} mg/dL · meta &lt;100</span>
-        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#ffb830"}}>⚠ HbA1c {latestLab.hba1c}% · meta &lt;5.7</span>
-        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#3ddc84"}}>✓ TG {latestLab.tg} mg/dL</span>
-        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#3ddc84"}}>✓ Glucosa {latestLab.glucose} mg/dL</span>
-      </div>
-
-      {/* ── SMART NOTIFICATIONS ── */}
-      {notifications.length > 0 && (
-        <div style={{background:"#131318",borderBottom:"1px solid #2a2a38"}}>
-          <div
-            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 44px",cursor:"pointer"}}
-            onClick={()=>setShowNotifs(v=>!v)}
-          >
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ffb830",letterSpacing:".15em"}}>
-                🔔 {notifications.length} AVISO{notifications.length>1?"S":""} INTELIGENTE{notifications.length>1?"S":""}
-              </span>
-              {notifications.filter(n=>n.type==="alert"||n.type==="warning").map(n=>(
-                <span key={n.id} style={{fontSize:12}}>{n.icon}</span>
-              ))}
+            {(()=>{
+              const li = allInbody[allInbody.length-1];
+              const tmb = li ? Math.round(370 + 21.6*li.m) : null;
+              const stats = li ? [
+                [li.w+" kg","Peso"],
+                [li.m+" kg","Músculo"],
+                [li.f+"%","Grasa"],
+                [tmb?tmb.toLocaleString():"—","TMB kcal"],
+              ] : [];
+              return stats.map(([v,l])=>(
+                <div key={l} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>
+                  <strong style={{display:"block",fontSize:"14px",color:"#e8e8f0",marginBottom:1,fontFamily:"'Syne',sans-serif",fontWeight:700}}>{v}</strong>{l}
+                </div>
+              ));
+            })()}
             </div>
             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{showNotifs?"▲":"▼"}</span>
           </div>
@@ -2095,86 +2081,35 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             )}
 
-
-
-            <div className="sec-h">Semana Tipo — Push / Pull / Legs</div>
-            <div className="g7" style={{marginBottom:20}}>
-              {TRAINING_WEEK.map(d=>(
-                <div key={d.day} className="card" style={{
-                  borderTop:d.rest?"none":`2px solid ${d.color}`,
-                  borderStyle:d.rest?"dashed":"solid",
-                  opacity:d.rest?0.4:1,
-                }}>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,letterSpacing:"-.01em"}}>{d.day}</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",letterSpacing:".15em",color:d.rest?"#44445a":d.color,textTransform:"uppercase",marginBottom:10}}>{d.type}</div>
-                  {d.rest
-                    ? <div style={{fontSize:10,color:"#44445a"}}>Foam roller<br/>8–10k pasos<br/>Movilidad</div>
-                    : <ul style={{listStyle:"none"}}>
-                        {d.ex.map(([name,sets])=>(
-                          <li key={name} style={{display:"flex",justifyContent:"space-between",gap:4,padding:"3px 0",borderBottom:"1px solid rgba(42,42,56,.5)",fontSize:10,color:"#8888a8"}}>
-                            <span>{name}</span>
-                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:d.color,flexShrink:0,fontWeight:500}}>{sets}</span>
-                          </li>
-                        ))}
-                      </ul>
-                  }
-                </div>
-              ))}
-            </div>
-
-            <div className="sec-h">Periodización — 4 Semanas</div>
+            {/* ── Perfil de Entrenamiento ── */}
+            <div className="sec-h">Perfil & Configuración</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Tu equipo, suplementos y objetivos alimentan el generador de rutinas. Edítalos en CONFIG.</p>
             <div className="g2" style={{marginBottom:20}}>
-              <div className="card">
-                <div className="lbl" style={{marginBottom:12}}>Progresión de Tempo</div>
-                <table className="tbl">
-                  <thead><tr><th>Semana</th><th>Tempo</th><th>Descripción</th></tr></thead>
-                  <tbody>
-                    {[["Sem 1–2","4-1-1-1","#a8ff3e","Carga estándar · Series completas"],["Sem 3","4-2-1-1","#4dc8ff","Pausa larga · Mayor tensión muscular"],["Sem 4 Deload","3-0-1-0","#ffb830","−1 serie/ejercicio · Recuperación activa"]].map(([s,t,c,d])=>(
-                      <tr key={s}><td>{s}</td><td className="mono" style={{color:c}}>{t}</td><td style={{fontSize:11,color:"#8888a8"}}>{d}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="card" style={{borderTop:"2px solid #a8ff3e"}}>
+                <div className="lbl" style={{marginBottom:12}}>🏋️ Equipo Disponible</div>
+                {userProfile.equipment.map((e,i)=>(
+                  <div key={i} style={{padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.4)",fontSize:12,color:"#8888a8"}}>
+                    <span style={{color:"#a8ff3e",marginRight:8}}>›</span>{e}
+                  </div>
+                ))}
               </div>
-              <div className="card">
-                <div className="lbl" style={{marginBottom:12}}>Equipo Disponible</div>
-                {[["Mancuernas","10 · 25 · 30 lbs","DB 30 llena el gap para press y remos"],["KB + Chaleco","53 lbs + 15 lbs","Swings, goblets, Turkish get-up"],["Barras + Ligas","Parque · Ligas","Dominadas · Fondos · Face pulls"],["Cardio","Cuerda + Roller","Dobles · Foam rolling diario"]].map(([e,v,d])=>(
-                  <div key={e} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"8px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                    <div>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:600}}>{e}</div>
-                      <div style={{fontSize:10,color:"#8888a8",marginTop:1}}>{d}</div>
-                    </div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#a8ff3e",textAlign:"right",flexShrink:0}}>{v}</div>
+              <div className="card" style={{borderTop:"2px solid #4dc8ff"}}>
+                <div className="lbl" style={{marginBottom:12}}>💊 Suplementos Actuales</div>
+                {userProfile.supplements.map((s,i)=>(
+                  <div key={i} style={{padding:"5px 0",borderBottom:"1px solid rgba(42,42,56,.4)",fontSize:12,color:"#8888a8"}}>
+                    <span style={{color:"#4dc8ff",marginRight:8}}>›</span>{s}
                   </div>
                 ))}
               </div>
             </div>
-
-            <div className="sec-h">Suplementación</div>
-            <div className="g2">
-              {[
-                {icon:"🌅",title:"Mañana (con desayuno)",color:"#ffb830",items:[
-                  ["Vitamina D3","2000–5000 UI — con grasa para absorción"],
-                  ["Vitamina C","500–1000 mg — antioxidante protector LDL"],
-                  ["Zinc","15–25 mg — no simultáneo con calcio"],
-                  ["Omega-3","2–4g EPA+DHA — saltar días de salmón"],
-                ]},
-                {icon:"⚡",title:"Post-Entreno & Noche",color:"#4dc8ff",items:[
-                  ["Creatina 5g","Post-entreno con shake + banana"],
-                  ["Whey isolate 30g","Dentro de 45 min post-entreno"],
-                  ["Magnesio glicinato 400mg","30 min antes de dormir"],
-                  ["Rosuvastatina","Con cena — síntesis colesterol pico nocturno"],
-                ]},
-              ].map(sec=>(
-                <div key={sec.title} className="card" style={{borderTop:`2px solid ${sec.color}`}}>
-                  <div className="lbl" style={{marginBottom:12}}>{sec.icon} {sec.title}</div>
-                  {sec.items.map(([n,d])=>(
-                    <div key={n} style={{padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13}}>{n}</div>
-                      <div style={{fontSize:11,color:"#8888a8",marginTop:2}}>{d}</div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+            <div className="card" style={{marginBottom:20,borderTop:"2px solid #ffb830"}}>
+              <div className="lbl" style={{marginBottom:8}}>🎯 Objetivos & Contexto Clínico</div>
+              <div style={{fontSize:12,color:"#8888a8",lineHeight:1.6}}>{userProfile.goals}</div>
+              <div style={{fontSize:11,color:"#44445a",marginTop:8,fontFamily:"'JetBrains Mono',monospace"}}>{userProfile.health_notes}</div>
+              <div style={{display:"flex",gap:16,marginTop:10}}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>Duración: <strong style={{color:"#ffb830"}}>{userProfile.session_duration}</strong></div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>Días/semana: <strong style={{color:"#ffb830"}}>{userProfile.training_days}</strong></div>
+              </div>
             </div>
           </div>
         )}
@@ -2376,7 +2311,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               <div>
                 <div className="ins ib" style={{marginBottom:16}}>
                   <strong>💡 Hábitos con IA</strong>
-                  Presiona "ACTUALIZAR" para que la IA analice tu log reciente y genere hábitos personalizados a tus marcadores actuales (LDL 124, HbA1c 5.90%) y patrones de alimentación.
+                  Presiona "ACTUALIZAR" para que la IA analice tu log reciente y genere hábitos personalizados a tus marcadores y patrones de alimentación actuales.
                 </div>
                 <div className="sec-h">Hábitos Base — Protocolo 2026</div>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Protocolo de hábitos personalizado generado por IA según tu progreso actual.</p>
@@ -2570,7 +2505,57 @@ Analiza este día y responde SOLO JSON sin backticks:
         {/* ══ CONFIG ══ */}
         {tab==="config" && (
           <div>
-            <div className="sec-h">Objetivos Nutricionales</div>
+            <div className="sec-h">Perfil de Usuario</div>
+            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Este perfil alimenta todos los análisis y rutinas con IA. Mantenlo actualizado.</p>
+            <div className="card" style={{marginBottom:14}}>
+              {(()=>{
+                const [editing, setEditing] = React.useState(false);
+                const [tmp, setTmp] = React.useState(userProfile);
+                return editing ? (
+                  <div>
+                    <div style={{marginBottom:10}}>
+                      <div className="lbl" style={{marginBottom:4}}>🎯 Objetivos</div>
+                      <textarea value={tmp.goals} onChange={e=>setTmp({...tmp,goals:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <div className="lbl" style={{marginBottom:4}}>🩺 Contexto clínico</div>
+                      <textarea value={tmp.health_notes} onChange={e=>setTmp({...tmp,health_notes:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <div className="lbl" style={{marginBottom:4}}>🏋️ Equipo (una línea por ítem)</div>
+                      <textarea value={tmp.equipment.join("\n")} onChange={e=>setTmp({...tmp,equipment:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={5} style={{resize:"vertical"}}/>
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <div className="lbl" style={{marginBottom:4}}>💊 Suplementos (una línea por ítem)</div>
+                      <textarea value={tmp.supplements.join("\n")} onChange={e=>setTmp({...tmp,supplements:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={6} style={{resize:"vertical"}}/>
+                    </div>
+                    <div className="g2" style={{gap:8,marginBottom:10}}>
+                      <div>
+                        <div className="lbl" style={{marginBottom:4}}>⏱ Duración sesión</div>
+                        <input value={tmp.session_duration} onChange={e=>setTmp({...tmp,session_duration:e.target.value})} className="inp"/>
+                      </div>
+                      <div>
+                        <div className="lbl" style={{marginBottom:4}}>📅 Días/semana</div>
+                        <input type="number" min={1} max={7} value={tmp.training_days} onChange={e=>setTmp({...tmp,training_days:Number(e.target.value)})} className="inp"/>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button className="btn" style={{flex:1}} onClick={()=>{saveUserProfile(tmp);setEditing(false);}}>✓ GUARDAR PERFIL</button>
+                      <button className="btn-sm" onClick={()=>setEditing(false)}>CANCELAR</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Objetivos:</strong> {userProfile.goals}</div>
+                    <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Clínico:</strong> {userProfile.health_notes}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>{userProfile.equipment.length} equipos · {userProfile.supplements.length} suplementos · {userProfile.session_duration} · {userProfile.training_days}d/semana</div>
+                    <button className="btn-sm" onClick={()=>{setTmp(userProfile);setEditing(true);}}>EDITAR PERFIL</button>
+                  </div>
+                );
+              })()}
+            </div>
+
+                        <div className="sec-h">Objetivos Nutricionales</div>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Ajusta tus objetivos de macros, gestiona favoritos y haz backup de tu data.</p>
             <div className="card" style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -2580,7 +2565,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </button>
               </div>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12,letterSpacing:".08em"}}>
-                Calculados para recomposición · 82.8 kg · TMB 1,817 kcal · TDEE ~2,500
+                {`Calculados para ${userProfile.goals.slice(0,30)}... · ${allInbody[allInbody.length-1]?.w||"—"} kg · TMB ${allInbody[allInbody.length-1] ? Math.round(370+21.6*allInbody[allInbody.length-1].m).toLocaleString() : "—"} kcal`}
               </div>
               {MACRO_KEYS.map(k=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
