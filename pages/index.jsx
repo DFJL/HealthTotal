@@ -11,8 +11,8 @@ import {
   getProfile, upsertProfile,
   getFoodLog, upsertFoodEntry, deleteFoodEntry,
   getFavorites, upsertFavorite, deleteFavorite,
-  getBodyMeasurements, insertBodyMeasurement,
-  getLabResults, insertLabResult,
+  getBodyMeasurements, insertBodyMeasurement, insertBodyMeasurementsBatch,
+  getLabResults, insertLabResult, insertLabResultsBatch,
   getAiCache, setAiCache,
   getBodyPhotos, insertBodyPhoto, deleteBodyPhoto,
 } from "../lib/db";
@@ -22,7 +22,7 @@ const INITIAL_FAVS = [
   {id:1772645449956,name:"Overnight Oats con Chía, Proteína, Almendras y Arándanos",calories:380,protein:28,carbs:42,fats:12,grade:"A",score:9,meal:"Snack Mañana",dayType:"entreno",ldl_impact:"positivo",hba1c_impact:"positivo",notes:"Excelente pre-entreno: fibra, proteína, grasas saludables. Almendras y chía bajan LDL"},
 ];
 
-const INBODY = [
+const SEED_INBODY = [
   {d:"Ago'18",w:69.3,m:55.1,f:16.4,s:null,vi:4,whr:0.85,note:"Baseline"},
   {d:"Abr'19",w:68.0,m:32.2,f:16.1,s:80,vi:4,whr:0.84,note:""},
   {d:"May'19",w:68.1,m:32.2,f:16.3,s:79,vi:4,whr:0.85,note:""},
@@ -44,7 +44,7 @@ const INBODY = [
   {d:"Feb'26",w:82.8,m:38.5,f:19.0,s:null,vi:6,whr:0.93,note:"HOY ◀"},
 ];
 
-const LABS_HIST = [
+const SEED_LABS = [
   {date:"Ago 2025",ldl:224.2,hdl:65.8,tc:318,tg:140,hba1c:5.80,glucose:93.5,psa:null,vcm:72.5,hcm:24.5,hb:13.8,leucocitos:4.82,linfocitos:44.8},
   {date:"Nov 2025",ldl:139.4,hdl:60.0,tc:235,tg:178,hba1c:null,glucose:null,psa:1.1,vcm:75.7,hcm:25.3,hb:15.1,leucocitos:6.62,linfocitos:45.2},
   {date:"Feb 2026",ldl:124.4,hdl:61.0,tc:208,tg:113,hba1c:5.90,glucose:97.0,psa:null,vcm:null,hcm:null,hb:null,leucocitos:null,linfocitos:null},
@@ -391,6 +391,8 @@ function AppInner() {
   const [inbodyResult, setInbodyResult]   = useState(null);
   const [inbodyB64, setInbodyB64] = useState(null);
   const [customInbody, setCustomInbody] = useState([]);
+  const [bodyMeasurements, setBodyMeasurements] = useState([]);
+  const [labResults, setLabResults] = useState([]);
   // Labs upload
   const [labsLoading, setLabsLoading] = useState(false);
   const [labsResult, setLabsResult]   = useState(null);
@@ -446,12 +448,28 @@ function AppInner() {
     if (!user) return;
     (async () => {
       try {
-        const [profileResult, logData, favsData, photos] = await Promise.all([
+        const [profileResult, logData, favsData, photos, dbMeasurements, dbLabs] = await Promise.all([
           getProfile(user.id).catch(() => null),
           getFoodLog(user.id).catch(() => ({})),
           getFavorites(user.id).catch(() => []),
           getBodyPhotos(user.id).catch(() => []),
+          getBodyMeasurements(user.id).catch(() => []),
+          getLabResults(user.id).catch(() => []),
         ]);
+        // Seed body measurements if empty
+        if (dbMeasurements.length === 0) {
+          insertBodyMeasurementsBatch(user.id, SEED_INBODY).catch(console.error);
+          setBodyMeasurements(SEED_INBODY);
+        } else {
+          setBodyMeasurements(dbMeasurements);
+        }
+        // Seed lab results if empty
+        if (dbLabs.length === 0) {
+          insertLabResultsBatch(user.id, SEED_LABS).catch(console.error);
+          setLabResults(SEED_LABS);
+        } else {
+          setLabResults(dbLabs);
+        }
         // Auto-create profile if trigger didn't fire
         const profile = profileResult || await upsertProfile(user.id, {
           name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario',
@@ -830,7 +848,7 @@ Responde SOLO JSON sin backticks:
       const totDay = calcMacros(entries);
       const res = await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:`
-Perfil: ${userProfile.name||"Usuario"}, ${lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa`:"sin datos InBody"}. Metas: LDL<100 (actual ${LABS_HIST[LABS_HIST.length-1]?.ldl||"—"}), HbA1c<5.7% (actual ${LABS_HIST[LABS_HIST.length-1]?.hba1c||"—"}%), ${targets.protein}g proteína/día, ${targets.calories}kcal.
+Perfil: ${userProfile.name||"Usuario"}, ${lastInbody?`${lastInbody.w}kg, ${lastInbody.f}% grasa`:"sin datos InBody"}. Metas: LDL<100 (actual ${labResults[labResults.length-1]?.ldl||"—"}), HbA1c<5.7% (actual ${labResults[labResults.length-1]?.hba1c||"—"}%), ${targets.protein}g proteína/día, ${targets.calories}kcal.
 Fecha: ${dateKey}. Total del día hasta ahora: ${totDay.calories}kcal, ${totDay.protein}g proteína, ${totDay.carbs}g carbos, ${totDay.fats}g grasas.
 Comidas registradas:
 ${summary}
@@ -870,7 +888,7 @@ Analiza este día y responde SOLO JSON sin backticks:
     if(!m) return 0;
     return (2000+parseInt(m[2]))*100+(months[m[1]]??0);
   };
-  const allInbody = [...INBODY, ...customInbody].sort((a,b)=>parseInbodyDate(a.d)-parseInbodyDate(b.d));
+  const allInbody = [...bodyMeasurements, ...customInbody].sort((a,b)=>parseInbodyDate(a.d)-parseInbodyDate(b.d));
   const lastInbody = allInbody[allInbody.length-1] || null;
 
   // ─── SMART NOTIFICATIONS (all deps available here) ───
@@ -1006,7 +1024,7 @@ Analiza este día y responde SOLO JSON sin backticks:
     } catch(e) { alert("Error inesperado: " + e.message); }
   };
 
-  const latestLab = LABS_HIST[LABS_HIST.length-1];
+  const latestLab = labResults[labResults.length-1];
   const MODULES = [
     {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
     {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"]]},
@@ -1028,7 +1046,7 @@ Analiza este día y responde SOLO JSON sin backticks:
 
   if (!loaded) return (
     <div style={{background:"#0c0c0f",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-      <div style={{fontFamily:"'Syne',sans-serif",fontSize:52,fontWeight:800,letterSpacing:"-.01em",color:"#a8ff3e"}}>FELIPE HEALTH</div>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:52,fontWeight:800,letterSpacing:"-.01em",color:"#a8ff3e"}}>METABOLIC HEALTH OS</div>
       <div style={{display:"flex",gap:4}} className="dots">
         <span style={{color:"#a8ff3e"}}/><span style={{color:"#a8ff3e"}}/><span style={{color:"#a8ff3e"}}/>
       </div>
@@ -1038,7 +1056,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   return (
     <>
     <Head>
-      <title>Felipe Health</title>
+      <title>Metabolic Health OS</title>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet" />
     </Head>
@@ -1049,7 +1067,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       <div style={{padding:"32px 44px 26px",borderBottom:"1px solid #2a2a38",display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:16,flexWrap:"wrap",background:"#131318",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"-80px",right:"-60px",width:"420px",height:"420px",background:"radial-gradient(circle,rgba(168,255,62,.05),transparent 65%)",pointerEvents:"none"}}/>
         <div>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>Dashboard Integral · Feb 2026</div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".28em",textTransform:"uppercase",color:"#a8ff3e",marginBottom:10}}>{`Dashboard Integral · ${allInbody.length>0 ? allInbody[allInbody.length-1].d : 'Sin datos'}`}</div>
           <div style={{fontFamily:"'Syne',sans-serif",fontSize:"clamp(36px,7vw,72px)",fontWeight:800,lineHeight:.9,letterSpacing:"-.01em"}}>
             {(()=>{
               const parts = (userProfile.name||"Usuario").toUpperCase().trim().split(" ");
@@ -2064,7 +2082,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             <div className="sec-h">Tendencia de Lípidos</div>
             <div className="card" style={{padding:"16px 10px",marginBottom:20}}>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={LABS_HIST} margin={{top:5,right:10,bottom:5,left:0}}>
+                <LineChart data={labResults} margin={{top:5,right:10,bottom:5,left:0}}>
                   <XAxis dataKey="date" tick={{fill:"#44445a",fontSize:9,fontFamily:"JetBrains Mono"}}/>
                   <YAxis tick={{fill:"#8888a8",fontSize:9}} domain={[50,350]}/>
                   <Tooltip contentStyle={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,fontSize:11}}/>
@@ -2081,13 +2099,15 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             <div className="sec-h">Glucosa & Control Glucémico</div>
             <div className="g4" style={{marginBottom:20}}>
-              {[
-                {l:"HbA1c · Ago 2025",v:"5.80",u:"%",warn:true,ref:"meta <5.7%",c:"#ffb830"},
-                {l:"HbA1c · Feb 2026",v:"5.90",u:"%",warn:true,ref:"↑ leve · monitorear",c:"#ffb830"},
-                {l:"Glucosa · Ago 2025",v:"93.5",u:"mg/dL",warn:false,ref:"Normal (70–100)",c:"#3ddc84"},
-                {l:"Glucosa · Feb 2026",v:"97.0",u:"mg/dL",warn:false,ref:"+3.5 · Aún en rango",c:"#3ddc84"},
-              ].map(x=>(
-                <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
+              {labResults.filter(r=>r.hba1c||r.glucose).flatMap(r=>[
+                r.hba1c!=null && {key:`hba1c_${r.date}`, l:`HbA1c · ${r.date}`, v:r.hba1c, u:"%",
+                  c:r.hba1c<5.7?"#3ddc84":r.hba1c<6.0?"#ffb830":"#ff4d4d",
+                  ref:r.hba1c<5.7?"✓ Normal":r.hba1c<6.0?"Zona de riesgo · monitorear":"⚠ Prediabetes"},
+                r.glucose!=null && {key:`gluc_${r.date}`, l:`Glucosa · ${r.date}`, v:r.glucose, u:"mg/dL",
+                  c:r.glucose<100?"#3ddc84":r.glucose<126?"#ffb830":"#ff4d4d",
+                  ref:r.glucose<100?"Normal (70–100)":r.glucose<126?"Prediabetes (100–125)":"⚠ Revisar"},
+              ]).filter(Boolean).map(x=>(
+                <div key={x.key} className="card" style={{borderTop:`2px solid ${x.c}`}}>
                   <div className="lbl">{x.l}</div>
                   <div className="bnum" style={{color:x.c,fontSize:38}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
                   <div style={{fontSize:11,color:"#8888a8",marginTop:6}}>{x.ref}</div>
@@ -2095,26 +2115,51 @@ Analiza este día y responde SOLO JSON sin backticks:
               ))}
             </div>
 
-            <div className="sec-h">Perfil Lipídico Completo — 3 Mediciones</div>
+            <div className="sec-h">Perfil Lipídico Completo — {labResults.length} Medición{labResults.length!==1?"es":""}</div>
             <div className="card" style={{overflowX:"auto",marginBottom:20}}>
               <table className="tbl">
-                <thead><tr><th>Parámetro</th><th>Ago 2025</th><th>Nov 2025</th><th>Feb 2026</th><th>Meta</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Parámetro</th>
+                    {labResults.map(r=><th key={r.date}>{r.date}</th>)}
+                    <th>Meta</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {[
-                    ["Col. Total",318,"MUY ALTO","#ff4d4d",235,"ALTO","#ffb830",208,"LEVE","#ffb830","<200"],
-                    ["LDL",224,"MUY ALTO","#ff4d4d",139,"LÍMITE","#ffb830",124,"SOBRE","#ffb830","<100"],
-                    ["HDL",65.8,"NORMAL","#3ddc84",60.0,"NORMAL","#3ddc84",61.0,"NORMAL","#3ddc84","40–100"],
-                    ["Triglicéridos",140,"NORMAL","#3ddc84",178,"LÍMITE","#ffb830",113,"NORMAL","#3ddc84","<150"],
-                    ["Ratio Col/HDL",4.8,"ALTO","#ff4d4d",3.9,"OK","#ffb830",3.4,"NORMAL","#3ddc84","<4.6"],
-                  ].map(([n,v1,l1,c1,v2,l2,c2,v3,l3,c3,meta])=>(
-                    <tr key={n}>
-                      <td><strong>{n}</strong></td>
-                      <td className="mono" style={{color:c1}}>{v1} <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{l1}</span></td>
-                      <td className="mono" style={{color:c2}}>{v2} <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{l2}</span></td>
-                      <td className="mono" style={{color:c3}}>{v3} <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{l3}</span></td>
-                      <td style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{meta}</td>
+                    {key:"tc",   label:"Col. Total", meta:"<200", thresholds:[200,240]},
+                    {key:"ldl",  label:"LDL",        meta:"<100", thresholds:[100,130]},
+                    {key:"hdl",  label:"HDL",        meta:"40–100", thresholds:[60,40], invert:true},
+                    {key:"tg",   label:"Triglicéridos", meta:"<150", thresholds:[150,200]},
+                  ].map(({key,label,meta,thresholds,invert})=>{
+                    const getColor = v => {
+                      if(v==null) return "#44445a";
+                      if(invert) return v>=thresholds[0]?"#3ddc84":v>=thresholds[1]?"#ffb830":"#ff4d4d";
+                      return v<thresholds[0]?"#3ddc84":v<thresholds[1]?"#ffb830":"#ff4d4d";
+                    };
+                    return (
+                      <tr key={key}>
+                        <td><strong>{label}</strong></td>
+                        {labResults.map(r=>(
+                          <td key={r.date} className="mono" style={{color:getColor(r[key])}}>
+                            {r[key]??'—'}
+                          </td>
+                        ))}
+                        <td style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>{meta}</td>
+                      </tr>
+                    );
+                  })}
+                  {labResults.some(r=>r.tc&&r.hdl) && (
+                    <tr>
+                      <td><strong>Ratio Col/HDL</strong></td>
+                      {labResults.map(r=>{
+                        const ratio = r.tc&&r.hdl ? (r.tc/r.hdl).toFixed(1) : null;
+                        const c = !ratio?"#44445a":ratio<4.6?"#3ddc84":ratio<5?"#ffb830":"#ff4d4d";
+                        return <td key={r.date} className="mono" style={{color:c}}>{ratio??'—'}</td>;
+                      })}
+                      <td style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>&lt;4.6</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
