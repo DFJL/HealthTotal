@@ -1012,10 +1012,25 @@ function AppInner() {
   const resetAdd = () => { setShowAdd(false); setAiResult(null); setAiInput(""); setAiImage(null); setAiB64(null); };
   const addEntry = e => { const nl={...log,[selDate]:[...dayLog,{...e,meal:e.meal||selMeal,dayType:e.dayType||selDayType,id:Date.now()}]}; saveLog(nl, selDate); resetAdd(); };
 
+  const compressForAI = (dataUrl, callback) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1024; // max dimension px
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL("image/jpeg", 0.82);
+      callback(compressed, compressed.split(",")[1]);
+    };
+    img.src = dataUrl;
+  };
+
   const handleImg = e => {
     const f=e.target.files[0]; if(!f) return;
     const r=new FileReader();
-    r.onload = ev => { setAiImage(ev.target.result); setAiB64(ev.target.result.split(",")[1]); };
+    r.onload = ev => compressForAI(ev.target.result, (url, b64) => { setAiImage(url); setAiB64(b64); });
     r.readAsDataURL(f);
     e.target.value = ""; // reset so same file can be re-selected
   };
@@ -1023,7 +1038,7 @@ function AppInner() {
     e.preventDefault(); setDragOver(false);
     const f = e.dataTransfer.files[0]; if(!f||!f.type.startsWith("image/")) return;
     const r = new FileReader();
-    r.onload = ev => { setAiImage(ev.target.result); setAiB64(ev.target.result.split(",")[1]); };
+    r.onload = ev => compressForAI(ev.target.result, (url, b64) => { setAiImage(url); setAiB64(b64); });
     r.readAsDataURL(f);
   };
 
