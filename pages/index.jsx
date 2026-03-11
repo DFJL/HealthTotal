@@ -2333,10 +2333,16 @@ Analiza este día y responde SOLO JSON sin backticks:
             {/* Summary table */}
             <div className="sec-h">Resumen por Día — 14 días</div>
             <div className="card" style={{marginBottom:20}}>
+              {weekData.filter(d=>d.entries>0).length === 0 ? (
+                <div style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em"}}>SIN REGISTROS EN LOS ÚLTIMOS 14 DÍAS</div>
+                  <div style={{fontSize:11,marginTop:6}}>Empieza a registrar comidas en la pestaña REGISTRO</div>
+                </div>
+              ) : (
               <table className="tbl">
                 <thead><tr><th>Fecha</th><th>Kcal</th><th>Prot</th><th>Carbs</th><th>Grasas</th><th>Comidas</th></tr></thead>
                 <tbody>
-                  {[...weekData].reverse().map(d=>{
+                  {[...weekData].reverse().filter(d=>d.entries>0).map(d=>{
                     // detect cheat day: >130% kcal or >50% D/F entries
                     const dEntries = log[d.key]||[];
                     const dBad = dEntries.filter(e=>e.grade==="D"||e.grade==="F").length;
@@ -2357,6 +2363,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   })}
                 </tbody>
               </table>
+              )}
             </div>
 
             {/* ── CHEAT DAY ANALYZER ── */}
