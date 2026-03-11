@@ -707,7 +707,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       const rawText = data.content.map(b=>b.text||"").join("");
       const m3 = rawText.match(/\{[\s\S]*\}/);
       if (!m3) throw new Error("No JSON in response");
-      const parsed = extractJSON(rawText);
+      const parsed = extractJSON(txt3);
       setDayInsight(prev=>({...prev,[dateKey]:parsed}));
     } catch(e) {
       setDayInsight(prev=>({...prev,[dateKey]:{status:"amarillo",titulo:"Error al analizar",resumen:"No se pudo generar el análisis. Intenta de nuevo.",tip:""}}));
@@ -812,9 +812,9 @@ Analiza este día y responde SOLO JSON sin backticks:
 
   const latestLab = LABS_HIST[LABS_HIST.length-1];
   const MODULES = [
-    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO NUTRICIONAL"],["plan","PLAN"],["guia","GUÍA"],["analisis","ANÁLISIS"]]},
+    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
     {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"]]},
-    {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"],["habitos","HÁBITOS"]]},
+    {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
   ];
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
@@ -1289,7 +1289,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                       {e.score && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{e.score}/10</span>}
                     </div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:14,marginBottom:6}}>{e.name}</div>
-                    {e.image && <img src={e.image} alt="" style={{width:"100%",maxHeight:220,objectFit:"contain",background:"#0c0c0f",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
+                    {e.image && <img src={e.image} alt="" style={{width:"100%",height:120,objectFit:"cover",objectPosition:"center",borderRadius:3,marginBottom:6,display:"block"}}/>}
                     <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",marginBottom:4}}>
                       <span style={{color:"#ffb830"}}>{e.calories}kcal</span> · <span style={{color:"#4dc8ff"}}>{e.protein}g P</span> · <span style={{color:"#a8ff3e"}}>{e.carbs}g C</span> · <span style={{color:"#ff7a4d"}}>{e.fats}g F</span>
                     </div>
@@ -2203,9 +2203,9 @@ Analiza este día y responde SOLO JSON sin backticks:
           </div>
         )}
 
-        {/* ══ PLAN ══ */}
-        {tab==="plan" && (()=>{
-          // ── Compute 7-day stats ──
+        {/* ══ GUÍA ══ */}
+        {tab==="guia" && (()=>{
+          // ── 7-day stats ──
           const days7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
           const loggedDays7 = days7.filter(d=>(log[d]||[]).length>0);
           const allEntries7 = days7.flatMap(d=>log[d]||[]);
@@ -2215,53 +2215,100 @@ Analiza este día y responde SOLO JSON sin backticks:
             carbs:    Math.round(allEntries7.reduce((s,e)=>s+(e.carbs||0),0)/loggedDays7.length),
             fats:     Math.round(allEntries7.reduce((s,e)=>s+(e.fats||0),0)/loggedDays7.length),
           } : null;
+          const gradeCount7 = {A:0,B:0,C:0,D:0,F:0};
+          allEntries7.forEach(e=>{ if(e.grade && gradeCount7[e.grade]!==undefined) gradeCount7[e.grade]++; });
+          const totalGraded7 = Object.values(gradeCount7).reduce((s,v)=>s+v,0);
+          const abPct7 = totalGraded7>0 ? Math.round((gradeCount7.A+gradeCount7.B)/totalGraded7*100) : null;
+          const dfPct7 = totalGraded7>0 ? Math.round((gradeCount7.D+gradeCount7.F)/totalGraded7*100) : null;
 
-          // ── Grade distribution 7d ──
-          const gradeCount = {A:0,B:0,C:0,D:0,F:0};
-          allEntries7.forEach(e=>{ if(e.grade && gradeCount[e.grade]!==undefined) gradeCount[e.grade]++; });
-          const totalGraded = Object.values(gradeCount).reduce((s,v)=>s+v,0);
-          const abPct = totalGraded>0 ? Math.round((gradeCount.A+gradeCount.B)/totalGraded*100) : null;
-          const dfPct = totalGraded>0 ? Math.round((gradeCount.D+gradeCount.F)/totalGraded*100) : null;
+          // ── 14-day trend insights ──
+          const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
+          const entries14 = days14.flatMap(d=>log[d]||[]);
+          const loggedDays14 = days14.filter(d=>(log[d]||[]).length>0).length;
+          const avgProtein14 = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.protein||0),0)/loggedDays14) : 0;
+          const avgKcal14   = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.calories||0),0)/loggedDays14) : 0;
+          const abCount14   = entries14.filter(e=>e.grade==="A"||e.grade==="B").length;
+          const abPct14     = entries14.length>0 ? Math.round(abCount14/entries14.length*100) : 0;
+          const lastInbody  = allInbody[allInbody.length-1];
+          const prevInbody  = allInbody.length>1 ? allInbody[allInbody.length-2] : null;
+          const muscleGain  = lastInbody && prevInbody ? (lastInbody.m - prevInbody.m).toFixed(1) : null;
 
-          // ── Meals eaten today ──
-          const todayMeals = new Set((log[todayStr()]||[]).map(e=>e.meal));
-          const MEAL_ORDER = ["Desayuno","Snack Mañana","Almuerzo","Post-Entreno","Cena","Merienda"];
-          const remainingMeals = MEAL_ORDER.filter(m=>!todayMeals.has(m));
-          const doneMeals = MEAL_ORDER.filter(m=>todayMeals.has(m));
-
-          // ── Smart macro targets suggestion ──
-          const suggestedTargets = avg7 ? {
-            calories: avg7.calories < targets.calories*0.85 ? Math.round(targets.calories*0.95) : avg7.calories > targets.calories*1.15 ? Math.round(targets.calories*0.97) : targets.calories,
-            protein:  avg7.protein  < targets.protein*0.8  ? Math.round(targets.protein*1.05)  : targets.protein,
-            carbs:    targets.carbs,
-            fats:     targets.fats,
-          } : targets;
-
-          // ── Most consistent meals from log ──
-          const mealFreq = {};
-          allEntries7.forEach(e=>{ if(e.name&&e.meal) { const k=e.meal; mealFreq[k]=(mealFreq[k]||[]); mealFreq[k].push(e); }});
-
-          // ── Best foods by grade from favs + recent log ──
-          const allFoodHistory = Object.values(log).flat();
-          const foodStats = {};
-          allFoodHistory.forEach(e=>{
-            if(!e.name) return;
-            if(!foodStats[e.name]) foodStats[e.name]={name:e.name,count:0,grades:[],calories:e.calories,protein:e.protein,meal:e.meal};
-            foodStats[e.name].count++;
-            if(e.grade) foodStats[e.name].grades.push(e.grade);
-          });
-          const topFoods = Object.values(foodStats)
-            .map(f=>({...f, avgScore: f.grades.map(g=>g==="A"?5:g==="B"?4:g==="C"?3:g==="D"?2:1).reduce((s,v,_,a)=>s+v/a.length,0)||3}))
-            .filter(f=>f.count>=1).sort((a,b)=>b.avgScore-a.avgScore).slice(0,5);
-
-          // ── InBody trend ──
-          const lastInbody = allInbody[allInbody.length-1];
-          const prevInbody = allInbody[allInbody.length-2];
-          const muscleGain = lastInbody && prevInbody ? (lastInbody.m - prevInbody.m).toFixed(1) : null;
-          const fatLoss = lastInbody && prevInbody ? (prevInbody.f - lastInbody.f).toFixed(1) : null;
+          // ── Dynamic insights ──
+          const insights = [];
+          if(avgProtein14>0 && avgProtein14<targets.protein*0.85)
+            insights.push({type:"warn",icon:"💪",title:"Proteína insuficiente",text:`Promedio ${avgProtein14}g/día vs meta ${targets.protein}g. Cada déficit proteico = menos recuperación muscular. Agrega fuente en snack mañana y post-entreno.`});
+          if(avgKcal14>0 && avgKcal14>targets.calories*1.12)
+            insights.push({type:"warn",icon:"⚡",title:"Exceso calórico sostenido",text:`Promedio ${avgKcal14} kcal vs meta ${targets.calories}. ${avgKcal14-targets.calories} kcal extra/día pueden revertir el déficit de grasa. Revisa las cenas.`});
+          if(abPct14>0 && abPct14<50)
+            insights.push({type:"bad",icon:"📊",title:"Calidad nutricional baja",text:`Solo ${abPct14}% de comidas en A/B estos 14 días. Impacta directamente LDL, HbA1c y recomposición. Foco en proteína magra + vegetales en cada comida principal.`});
+          if(abPct14>=70)
+            insights.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de tu recomposición. Mantén el patrón.`});
+          if(muscleGain>0)
+            insights.push({type:"good",icon:"💪",title:`Masa muscular +${muscleGain}kg`,text:`Tu protocolo nutricional está funcionando. Sigue priorizando proteína post-entreno y mantén el superávit calórico moderado en días de entreno.`});
 
           return (
           <div>
+            {/* ── Status Banner 7 días ── */}
+            {avg7 && (
+              <div className="card fade-in" style={{marginBottom:20,borderLeft:`3px solid ${abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d"}`,borderRadius:"0 4px 4px 0",background:abPct7>=70?"rgba(61,220,132,.04)":abPct7>=50?"rgba(255,184,48,.04)":"rgba(255,77,77,.04)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:10}}>
+                  <div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d",letterSpacing:".15em",marginBottom:4}}>
+                      {abPct7>=70?"✅ SEMANA EN PROTOCOLO":abPct7>=50?"⚠ SEMANA PARCIAL":"🔴 SEMANA FUERA DE PROTOCOLO"}
+                    </div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16}}>
+                      Promedio últimos 7 días · {loggedDays7.length} días con registro
+                    </div>
+                  </div>
+                  {abPct7!==null && (
+                    <div style={{textAlign:"center",background:"#1a1a22",borderRadius:3,padding:"8px 16px"}}>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:32,color:abPct7>=70?"#3ddc84":abPct7>=50?"#ffb830":"#ff4d4d",lineHeight:1}}>{abPct7}%</div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>comidas A+B</div>
+                    </div>
+                  )}
+                </div>
+                <div className="g4">
+                  {MACRO_KEYS.map(k=>{
+                    const real=avg7[k]; const meta=targets[k];
+                    const pct=Math.round(real/meta*100);
+                    const c=pct>=90&&pct<=115?"#3ddc84":pct>=75?"#ffb830":"#ff4d4d";
+                    const delta=real-meta;
+                    return (
+                      <div key={k} style={{background:"#131318",borderRadius:3,padding:"10px 8px",textAlign:"center"}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:3,letterSpacing:".08em"}}>{MACRO_CFG[k].label.toUpperCase()}</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:c,lineHeight:1}}>{real}<span style={{fontSize:11,color:"#44445a"}}>{MACRO_CFG[k].unit}</span></div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:c,marginTop:3}}>
+                          {pct}% meta · {delta>0?"+":""}{delta}{MACRO_CFG[k].unit}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {avg7.protein < targets.protein*0.8 && (
+                  <div className="ins ir" style={{marginTop:10}}>
+                    ⚠ Proteína promedio <strong>{avg7.protein}g</strong> — {targets.protein-avg7.protein}g por debajo de meta. Prioriza batido proteico o pollo/atún en cada comida principal.
+                  </div>
+                )}
+                {dfPct7>25 && (
+                  <div className="ins ir" style={{marginTop:10}}>
+                    ⚠ <strong>{dfPct7}%</strong> de las comidas esta semana fueron D/F. Revisa el Hall of Shame en PROGRESO.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Dynamic Insights ── */}
+            {insights.length>0 && (
+              <div style={{marginBottom:20}}>
+                <div className="sec-h">Insights — Basados en tu Data</div>
+                {insights.map((ins,i)=>(
+                  <div key={i} className={`ins ${ins.type==="good"?"ig":ins.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
+                    <strong>{ins.icon} {ins.title}</strong>
+                    <div style={{marginTop:4,fontWeight:400}}>{ins.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* ── Macro targets ── */}
             <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
@@ -2282,191 +2329,30 @@ Analiza este día y responde SOLO JSON sin backticks:
               ))}
             </div>
 
-
-
-            {/* ── Template meals from PLAN_MEALS (reference) ── */}
+            {/* ── Plan de Referencia ── */}
             <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
             <p style={{fontSize:12,color:"#44445a",marginBottom:14,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".06em"}}>
-              PLANTILLA BASE · SE ADAPTA SEGÚN TUS REGISTROS REALES
+              PLANTILLA BASE CLÍNICA · REFERENCIA DE MACROS Y ALIMENTOS
             </p>
-            {PLAN_MEALS.map(m=>{
-              const mealDone = todayMeals.has(m.name.split(" ")[0]) || todayMeals.has(m.name);
-              return (
-                <div key={m.name} className="card" style={{marginBottom:12,borderLeft:`3px solid ${mealDone?"#3ddc84":m.highlight?"#a8ff3e":"#2a2a38"}`,borderRadius:"0 4px 4px 0",opacity:mealDone?0.6:1}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                    <div>
-                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,letterSpacing:"-.01em"}}>
-                        {mealDone&&<span style={{color:"#3ddc84",marginRight:6}}>✓</span>}{m.name}
-                      </div>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>{m.time}</div>
-                    </div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",textAlign:"right"}}>
-                      <span style={{color:"#ffb830"}}>{m.kcal} kcal</span> · P:{m.p}g · C:{m.c}g · G:{m.f}g
-                    </div>
+            {PLAN_MEALS.map(m=>(
+              <div key={m.name} className="card" style={{marginBottom:12,borderLeft:`3px solid ${m.highlight?"#a8ff3e":"#2a2a38"}`,borderRadius:"0 4px 4px 0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18}}>{m.name}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>{m.time}</div>
                   </div>
-                  {m.items.map(it=>(
-                    <div key={it.n} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)",gap:10}}>
-                      <div style={{fontSize:13,fontFamily:"'Instrument Sans',sans-serif",fontWeight:500}}>{it.n}</div>
-                      <div style={{fontSize:11,color:"#3ddc84",textAlign:"right",flex:"0 0 50%",fontStyle:"italic"}}>✦ {it.why}</div>
-                    </div>
-                  ))}
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",textAlign:"right"}}>
+                    <span style={{color:"#ffb830"}}>{m.kcal} kcal</span> · P:{m.p}g · C:{m.c}g · G:{m.f}g
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-          );
-        })()}
-
-        {/* ══ GUÍA ══ */}
-        {tab==="guia" && (()=>{
-          // ── Build semáforo from actual log data ──
-          const allLogged = Object.values(log).flat();
-          const foodMap = {};
-          allLogged.forEach(e=>{
-            if(!e.name) return;
-            if(!foodMap[e.name]) foodMap[e.name]={name:e.name,grades:[],ldl:[],hba1c:[],calories:e.calories,protein:e.protein,count:0};
-            foodMap[e.name].count++;
-            if(e.grade) foodMap[e.name].grades.push(e.grade);
-            if(e.ldl_impact) foodMap[e.name].ldl.push(e.ldl_impact);
-            if(e.hba1c_impact) foodMap[e.name].hba1c.push(e.hba1c_impact);
-          });
-          const scored = Object.values(foodMap).map(f=>{
-            const gs = f.grades.map(g=>g==="A"?5:g==="B"?4:g==="C"?3:g==="D"?2:1);
-            const avg = gs.length>0 ? gs.reduce((s,v)=>s+v,0)/gs.length : 3;
-            const ldlBad = f.ldl.filter(l=>l==="negativo").length;
-            const hba1cBad = f.hba1c.filter(h=>h==="negativo").length;
-            const penalty = (ldlBad/Math.max(f.ldl.length,1))*0.5 + (hba1cBad/Math.max(f.hba1c.length,1))*0.5;
-            return {...f, score: avg - penalty};
-          });
-          const greenFoods  = scored.filter(f=>f.score>=3.8).sort((a,b)=>b.score-a.score).slice(0,10);
-          const yellowFoods = scored.filter(f=>f.score>=2.5&&f.score<3.8).sort((a,b)=>b.count-a.count).slice(0,8);
-          const redFoods    = scored.filter(f=>f.score<2.5).sort((a,b)=>a.score-b.score).slice(0,8);
-          const hasData = allLogged.length>=5;
-
-          // ── Trend insights from all available data ──
-          const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-i); return d.toISOString().split("T")[0]; });
-          const entries14 = days14.flatMap(d=>log[d]||[]);
-          const loggedDays14 = days14.filter(d=>(log[d]||[]).length>0).length;
-          const avgProtein14 = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.protein||0),0)/loggedDays14) : 0;
-          const avgKcal14   = loggedDays14>0 ? Math.round(entries14.reduce((s,e)=>s+(e.calories||0),0)/loggedDays14) : 0;
-          const abCount14   = entries14.filter(e=>e.grade==="A"||e.grade==="B").length;
-          const abPct14     = entries14.length>0 ? Math.round(abCount14/entries14.length*100) : 0;
-          const lastInbody  = allInbody[allInbody.length-1];
-          const prevInbody  = allInbody.length>1 ? allInbody[allInbody.length-2] : null;
-
-          // ── Dynamic insights ──
-          const insights = [];
-          if(avgProtein14>0 && avgProtein14<targets.protein*0.85)
-            insights.push({type:"warn",icon:"💪",title:"Proteína insuficiente",text:`Promedio ${avgProtein14}g/día vs meta ${targets.protein}g. Cada 100kcal de déficit proteico = menos recuperación muscular. Agrega una fuente en snack mañana y post-entreno.`});
-          if(avgKcal14>0 && avgKcal14>targets.calories*1.12)
-            insights.push({type:"warn",icon:"⚡",title:"Exceso calórico sostenido",text:`Promedio ${avgKcal14} kcal vs meta ${targets.calories}. ${avgKcal14-targets.calories} kcal extra/día pueden revertir el déficit de grasa. Revisa las cenas.`});
-          if(abPct14>0 && abPct14<50)
-            insights.push({type:"bad",icon:"📊",title:"Calidad nutricional baja",text:`Solo ${abPct14}% de comidas en A/B estos 14 días. Esto impacta directamente LDL, HbA1c y recomposición. Foco en proteína magra + vegetales en cada comida principal.`});
-          if(abPct14>=70)
-            insights.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de tu recomposición. Mantén el patrón.`});
-          if(lastInbody && prevInbody && lastInbody.m > prevInbody.m)
-            insights.push({type:"good",icon:"💪",title:`Masa muscular +${(lastInbody.m-prevInbody.m).toFixed(1)}kg`,text:`Tu protocolo nutricional está funcionando. Sigue priorizando proteína post-entreno y mantén el superávit calórico moderado en días de entreno.`});
-          if(lastInbody && lastInbody.vi && lastInbody.vi>=10)
-            insights.push({type:"bad",icon:"⚠",title:"Grasa visceral alta",text:`Visceral ${lastInbody.vi} (meta <10). Prioriza: caminar 15-20 min post-almuerzo, reducir carbos refinados en cena, mantener déficit calórico en días de descanso.`});
-          if(redFoods.length>3)
-            insights.push({type:"warn",icon:"🍔",title:`${redFoods.length} alimentos problemáticos identificados`,text:`Tu historial muestra alimentos que impactan negativamente tus metas. Ver semáforo rojo abajo para detalles personalizados.`});
-
-          return (
-          <div>
-            {/* ── Dynamic Insights ── */}
-            {insights.length>0 && (
-              <div style={{marginBottom:20}}>
-                <div className="sec-h">Insights — Basados en tu Data Real</div>
-                {insights.map((ins,i)=>(
-                  <div key={i} className={`ins ${ins.type==="good"?"ig":ins.type==="bad"?"ir":"iy"}`} style={{marginBottom:8}}>
-                    <strong>{ins.icon} {ins.title}</strong>
-                    <div style={{marginTop:4,fontWeight:400}}>{ins.text}</div>
+                {m.items.map(it=>(
+                  <div key={it.n} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)",gap:10}}>
+                    <div style={{fontSize:13,fontWeight:500}}>{it.n}</div>
+                    <div style={{fontSize:11,color:"#3ddc84",textAlign:"right",flex:"0 0 50%",fontStyle:"italic"}}>✦ {it.why}</div>
                   </div>
                 ))}
               </div>
-            )}
-
-            {/* ── Semáforo dinámico ── */}
-            <div className="sec-h">Semáforo — {hasData?"Basado en tu historial":"Base clínica (agrega comidas para personalizar)"}</div>
-            {!hasData && (
-              <div className="ins ib" style={{marginBottom:14}}>
-                💡 El semáforo se personalizará automáticamente conforme registres más comidas. Por ahora muestra la base clínica para tu perfil.
-              </div>
-            )}
-            <div className="g3" style={{marginBottom:20}}>
-              <div className="card" style={{borderTop:"2px solid #3ddc84"}}>
-                <div className="lbl" style={{marginBottom:12}}>🟢 {hasData?"TUS MEJORES ALIMENTOS":"COMER ABUNDANTE"}</div>
-                {hasData ? (
-                  <div>
-                    {greenFoods.length>0 ? greenFoods.map(f=>(
-                      <div key={f.name} style={{padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <strong style={{fontSize:12}}>{f.name}</strong>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84"}}>{f.grades.filter(g=>g==="A"||g==="B").length}/{f.grades.length} A/B</span>
-                        </div>
-                        {f.calories>0&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:1}}>{f.calories}kcal · {f.protein}g P · {f.count}x registrado</div>}
-                      </div>
-                    )) : <div style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>AÚN SIN DATOS SUFICIENTES</div>}
-                  </div>
-                ) : (
-                  <table className="tbl"><thead><tr><th>Alimento</th><th>Beneficio</th></tr></thead><tbody>
-                    {[["Avena hojuelas","Beta-glucano → LDL −10%"],["Salmón / sardinas","EPA/DHA → TG −30%"],["Frijoles / lentejas","Fibra + fitosteroles"],["Aguacate","Fitosteroles → LDL↓"],["Nueces / almendras","MUFA → HDL↑"],["Yogur griego","Probióticos + proteína"],["Chía","Fibra + omega-3"],["Cacao oscuro","Flavonoides → insulina"]].map(([f,b])=>(
-                      <tr key={f}><td><strong>{f}</strong></td><td style={{fontSize:11,color:"#3ddc84"}}>{b}</td></tr>
-                    ))}
-                  </tbody></table>
-                )}
-              </div>
-
-              <div className="card" style={{borderTop:"2px solid #ffb830"}}>
-                <div className="lbl" style={{marginBottom:12}}>🟡 {hasData?"CON CUIDADO":"CON MODERACIÓN"}</div>
-                {hasData ? (
-                  <div>
-                    {yellowFoods.length>0 ? yellowFoods.map(f=>(
-                      <div key={f.name} style={{padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <strong style={{fontSize:12}}>{f.name}</strong>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ffb830"}}>
-                            {f.grades.length>0?f.grades[f.grades.length-1]:"—"}
-                          </span>
-                        </div>
-                        {f.calories>0&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:1}}>{f.calories}kcal · {f.count}x</div>}
-                      </div>
-                    )) : <div style={{fontSize:11,color:"#44445a",fontFamily:"'JetBrains Mono',monospace"}}>SIN ALIMENTOS EN ZONA AMARILLA</div>}
-                  </div>
-                ) : (
-                  <table className="tbl"><thead><tr><th>Alimento</th><th>Límite</th></tr></thead><tbody>
-                    {[["Carne roja magra","1x/sem"],["Queso fresco","30–40g máx"],["Huevos enteros","2/día OK"],["Pan integral","1 pieza/día"],["Papa / plátano","Porción pequeña"],["Arroz blanco","Solo sin integral"],["Miel / panela","Mínimo"]].map(([f,l])=>(
-                      <tr key={f}><td><strong>{f}</strong></td><td style={{fontSize:11,color:"#ffb830"}}>{l}</td></tr>
-                    ))}
-                  </tbody></table>
-                )}
-              </div>
-
-              <div className="card" style={{borderTop:"2px solid #ff4d4d"}}>
-                <div className="lbl" style={{marginBottom:12}}>🔴 {hasData?"TUS PEORES OPCIONES":"ELIMINAR"}</div>
-                {hasData ? (
-                  <div>
-                    {redFoods.length>0 ? redFoods.map(f=>(
-                      <div key={f.name} style={{padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <strong style={{fontSize:12}}>{f.name}</strong>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff4d4d"}}>
-                            {f.grades.filter(g=>g==="D"||g==="F").length}x D/F
-                          </span>
-                        </div>
-                        {f.calories>0&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:1}}>{f.calories}kcal · {f.count}x registrado</div>}
-                      </div>
-                    )) : <div style={{fontSize:11,color:"#3ddc84",fontFamily:"'JetBrains Mono',monospace",textAlign:"center",padding:"12px 0"}}>✅ SIN ALIMENTOS PROBLEMÁTICOS</div>}
-                  </div>
-                ) : (
-                  <table className="tbl"><thead><tr><th>Alimento</th><th>Razón</th></tr></thead><tbody>
-                    {[["Azúcar / dulces","HbA1c + TG directo"],["Refrescos / jugos","Pico glucémico + TG"],["Frituras / fast food","Grasas trans → LDL+++"],["Embutidos","Saturadas + nitratos"],["Pan blanco","IG muy alto"],["Quesos amarillos grasos","Grasas saturadas"],["Galletas / pasteles","Trans + azúcar"]].map(([f,r])=>(
-                      <tr key={f}><td><strong>{f}</strong></td><td style={{fontSize:11,color:"#ff4d4d"}}>{r}</td></tr>
-                    ))}
-                  </tbody></table>
-                )}
-              </div>
-            </div>
+            ))}
 
             {/* ── Suplementos ── */}
             <div className="sec-h">Suplementos — Timing Óptimo</div>
@@ -2491,12 +2377,12 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             </div>
 
-            {/* ── Próximos pasos clínicos dinámicos ── */}
-            <div className="sec-h">Próximos Pasos — Basados en tu Estado Actual</div>
+            {/* ── Próximos pasos clínicos ── */}
+            <div className="sec-h">Próximos Pasos Clínicos</div>
             <div className="card">
               {[
-                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días es el mayor driver para reducirla`},
-                lastInbody && lastInbody.m<38.5 && {icon:"💪",text:`Masa muscular ${lastInbody.m}kg (meta ≥38.5kg) — priorizar proteína post-entreno y consistencia en entrenos de fuerza`},
+                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días es el mayor driver para reducirla`},
+                lastInbody && lastInbody.m<38.5 && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg (meta ≥38.5kg) — priorizar proteína post-entreno y consistencia en entrenos de fuerza`},
                 avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína crónico (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
                 {icon:"📅",text:"Repetir HbA1c en Mayo 2026. Si ≥6.0%, manejo médico inmediato"},
                 {icon:"🔬",text:"Pedir ferritina + hierro sérico + TIBC en próximo panel (microcitosis VCM 72–75)"},
@@ -2512,6 +2398,7 @@ Analiza este día y responde SOLO JSON sin backticks:
           </div>
           );
         })()}
+
 
         {/* ══ HÁBITOS ══ */}
         {tab==="habitos" && (
