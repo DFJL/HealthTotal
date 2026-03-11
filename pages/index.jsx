@@ -311,6 +311,54 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
 `;
 
 
+function ProfileEditor({ userProfile, onSave }) {
+  const [editing, setEditing] = React.useState(false);
+  const [tmp, setTmp] = React.useState(userProfile);
+  React.useEffect(() => { if (!editing) setTmp(userProfile); }, [userProfile, editing]);
+  if (!editing) return (
+    <div>
+      <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Objetivos:</strong> {userProfile.goals}</div>
+      <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Clínico:</strong> {userProfile.health_notes}</div>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>{userProfile.equipment.length} equipos · {userProfile.supplements.length} suplementos · {userProfile.session_duration} · {userProfile.training_days}d/semana</div>
+      <button className="btn-sm" onClick={()=>setEditing(true)}>EDITAR PERFIL</button>
+    </div>
+  );
+  return (
+    <div>
+      <div style={{marginBottom:10}}>
+        <div className="lbl" style={{marginBottom:4}}>🎯 Objetivos</div>
+        <textarea value={tmp.goals} onChange={e=>setTmp({...tmp,goals:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div className="lbl" style={{marginBottom:4}}>🩺 Contexto clínico</div>
+        <textarea value={tmp.health_notes} onChange={e=>setTmp({...tmp,health_notes:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div className="lbl" style={{marginBottom:4}}>🏋️ Equipo (una línea por ítem)</div>
+        <textarea value={tmp.equipment.join("\n")} onChange={e=>setTmp({...tmp,equipment:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={5} style={{resize:"vertical"}}/>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div className="lbl" style={{marginBottom:4}}>💊 Suplementos (una línea por ítem)</div>
+        <textarea value={tmp.supplements.join("\n")} onChange={e=>setTmp({...tmp,supplements:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={6} style={{resize:"vertical"}}/>
+      </div>
+      <div className="g2" style={{gap:8,marginBottom:10}}>
+        <div>
+          <div className="lbl" style={{marginBottom:4}}>⏱ Duración sesión</div>
+          <input value={tmp.session_duration} onChange={e=>setTmp({...tmp,session_duration:e.target.value})} className="inp"/>
+        </div>
+        <div>
+          <div className="lbl" style={{marginBottom:4}}>📅 Días/semana</div>
+          <input type="number" min={1} max={7} value={tmp.training_days} onChange={e=>setTmp({...tmp,training_days:Number(e.target.value)})} className="inp"/>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button className="btn" style={{flex:1}} onClick={()=>{onSave(tmp);setEditing(false);}}>✓ GUARDAR PERFIL</button>
+        <button className="btn-sm" onClick={()=>setEditing(false)}>CANCELAR</button>
+      </div>
+    </div>
+  );
+}
+
 const USER_PROFILE_DEFAULT = {
   name: "Usuario",
   equipment: ["Mancuernas 10/25/30 lbs","KB 24kg","Chaleco lastrado 15 lbs","Bandas elásticas","Barras calistenia parque","Cuerda de saltar"],
@@ -2516,51 +2564,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             <div className="sec-h">Perfil de Usuario</div>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Este perfil alimenta todos los análisis y rutinas con IA. Mantenlo actualizado.</p>
             <div className="card" style={{marginBottom:14}}>
-              {(()=>{
-                const [editing, setEditing] = React.useState(false);
-                const [tmp, setTmp] = React.useState(userProfile);
-                return editing ? (
-                  <div>
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl" style={{marginBottom:4}}>🎯 Objetivos</div>
-                      <textarea value={tmp.goals} onChange={e=>setTmp({...tmp,goals:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
-                    </div>
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl" style={{marginBottom:4}}>🩺 Contexto clínico</div>
-                      <textarea value={tmp.health_notes} onChange={e=>setTmp({...tmp,health_notes:e.target.value})} className="inp" rows={2} style={{resize:"vertical"}}/>
-                    </div>
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl" style={{marginBottom:4}}>🏋️ Equipo (una línea por ítem)</div>
-                      <textarea value={tmp.equipment.join("\n")} onChange={e=>setTmp({...tmp,equipment:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={5} style={{resize:"vertical"}}/>
-                    </div>
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl" style={{marginBottom:4}}>💊 Suplementos (una línea por ítem)</div>
-                      <textarea value={tmp.supplements.join("\n")} onChange={e=>setTmp({...tmp,supplements:e.target.value.split("\n").filter(Boolean)})} className="inp" rows={6} style={{resize:"vertical"}}/>
-                    </div>
-                    <div className="g2" style={{gap:8,marginBottom:10}}>
-                      <div>
-                        <div className="lbl" style={{marginBottom:4}}>⏱ Duración sesión</div>
-                        <input value={tmp.session_duration} onChange={e=>setTmp({...tmp,session_duration:e.target.value})} className="inp"/>
-                      </div>
-                      <div>
-                        <div className="lbl" style={{marginBottom:4}}>📅 Días/semana</div>
-                        <input type="number" min={1} max={7} value={tmp.training_days} onChange={e=>setTmp({...tmp,training_days:Number(e.target.value)})} className="inp"/>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:8}}>
-                      <button className="btn" style={{flex:1}} onClick={()=>{saveUserProfile(tmp);setEditing(false);}}>✓ GUARDAR PERFIL</button>
-                      <button className="btn-sm" onClick={()=>setEditing(false)}>CANCELAR</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Objetivos:</strong> {userProfile.goals}</div>
-                    <div style={{fontSize:12,color:"#8888a8",marginBottom:8,lineHeight:1.6}}><strong style={{color:"#e8e8f0"}}>Clínico:</strong> {userProfile.health_notes}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>{userProfile.equipment.length} equipos · {userProfile.supplements.length} suplementos · {userProfile.session_duration} · {userProfile.training_days}d/semana</div>
-                    <button className="btn-sm" onClick={()=>{setTmp(userProfile);setEditing(true);}}>EDITAR PERFIL</button>
-                  </div>
-                );
-              })()}
+              <ProfileEditor userProfile={userProfile} onSave={saveUserProfile}/>
             </div>
 
                         <div className="sec-h">Objetivos Nutricionales</div>
