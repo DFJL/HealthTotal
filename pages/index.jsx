@@ -1000,6 +1000,7 @@ function AppInner() {
   const [routineInput, setRoutineInput] = useState("");
   const [routineLoading, setRoutineLoading] = useState(false);
   const [generatedRoutine, setGeneratedRoutine] = useState(null);
+  const [activeDay, setActiveDay] = useState(0);
   const [routineTs, setRoutineTs] = useState(null);
   const [savedRoutines, setSavedRoutines] = useState([]);
   const [aiHabits, setAiHabits] = useState(null);
@@ -1498,6 +1499,7 @@ Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 10 pa
       const txt = data.content?.map(i=>i.text||"").join("")||"";
       const routine = extractJSON(txt);
       setGeneratedRoutine(routine);
+      setActiveDay(0);
       const ts = Date.now();
       setRoutineTs(ts);
       await setAiCache(user.id, "routine", routine).catch(console.error);
@@ -3487,7 +3489,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
         {/* ══ ENTRENA ══ */}
         {tab==="entrena" && (()=>{
-          const [activeDay, setActiveDay] = React.useState(0);
           const printRoutine = () => {
             if (!generatedRoutine || generatedRoutine.error) return;
             const days = generatedRoutine.days || [];
