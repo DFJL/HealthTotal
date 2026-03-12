@@ -4182,57 +4182,65 @@ Analiza este día y responde SOLO JSON sin backticks:
           const minF  = allF.length ? Math.min(...allF) : null;
           const maxF  = allF.length ? Math.max(...allF) : null;
 
-          // ── FILTER: only body measurements that matter ──
-          // Criteria: first, last, hard milestones, OR significant delta vs previous
-          const W_THR = 1.5;   // kg weight change
-          const M_THR = 0.5;   // kg muscle change
-          const F_THR = 1.2;   // % fat change
-          const VI_THR = 2;    // visceral level change
+          // ── FILTER: strict thresholds — only genuinely meaningful shifts ──
+          // Delta is cumulative vs last KEPT entry (not adjacent), so streaks accumulate
+          const W_THR  = 3.0;  // kg  — significant weight shift
+          const M_THR  = 1.5;  // kg  — meaningful muscle change
+          const F_THR  = 2.5;  // %   — real fat % shift
+          const VI_THR = 2;    // lvl — visceral jump
 
-          const importantInbody = allInbody.filter((r, i, arr) => {
-            if (i === 0 || i === arr.length - 1) return true; // always first & last
-            const isMilestone = r.w===peakW || r.m===peakM || r.f===minF || r.f===maxF || (r.vi||0)>=10;
-            if (isMilestone) return true;
-            // Compare vs previous kept entry (not just adjacent — find prev in filtered so far)
-            const prev = arr[i-1];
-            const dW  = prev.w  != null && r.w  != null ? Math.abs(r.w  - prev.w)  : 0;
-            const dM  = prev.m  != null && r.m  != null ? Math.abs(r.m  - prev.m)  : 0;
-            const dF  = prev.f  != null && r.f  != null ? Math.abs(r.f  - prev.f)  : 0;
-            const dVI = prev.vi != null && r.vi != null ? Math.abs(r.vi - prev.vi) : 0;
-            return dW >= W_THR || dM >= M_THR || dF >= F_THR || dVI >= VI_THR;
-          });
+          const importantInbody = (() => {
+            const kept = [];
+            allInbody.forEach((r, i, arr) => {
+              const isFirst = i === 0;
+              const isLast  = i === arr.length - 1;
+              const isMilestone = r.w===peakW || r.m===peakM || r.f===minF || r.f===maxF;
+              // Delta vs last KEPT (not adjacent) — catches slow cumulative drift
+              const ref  = kept.length ? kept[kept.length-1] : null;
+              const dW   = ref?.w  != null && r.w  != null ? Math.abs(r.w  - ref.w)  : 0;
+              const dM   = ref?.m  != null && r.m  != null ? Math.abs(r.m  - ref.m)  : 0;
+              const dF   = ref?.f  != null && r.f  != null ? Math.abs(r.f  - ref.f)  : 0;
+              const dVI  = ref?.vi != null && r.vi != null ? Math.abs(r.vi - ref.vi) : 0;
+              const triggered = dW>=W_THR || dM>=M_THR || dF>=F_THR || dVI>=VI_THR;
+              // Build the reason string for this entry
+              const reasons = [];
+              if (isFirst)     reasons.push("Punto de partida");
+              if (isLast && !isFirst) reasons.push("Estado actual");
+              if (r.w===peakW) reasons.push(`Peso máximo histórico (${r.w} kg)`);
+              if (r.m===peakM) reasons.push(`Récord de músculo (${r.m} kg)`);
+              if (r.f===minF)  reasons.push(`Mínimo % grasa (${r.f}%)`);
+              if (r.f===maxF)  reasons.push(`Peor % grasa (${r.f}%)`);
+              if (triggered && ref) {
+                if (dW>=W_THR) reasons.push(`Peso ${(r.w-ref.w)>0?"+":""}${(r.w-ref.w).toFixed(1)} kg vs ${fmtD(ref.d)}`);
+                if (dM>=M_THR) reasons.push(`Músculo ${(r.m-ref.m)>0?"+":""}${(r.m-ref.m).toFixed(1)} kg vs ${fmtD(ref.d)}`);
+                if (dF>=F_THR) reasons.push(`Grasa ${(r.f-ref.f)>0?"+":""}${(r.f-ref.f).toFixed(1)}% vs ${fmtD(ref.d)}`);
+                if (dVI>=VI_THR) reasons.push(`Visceral ${ref.vi}→${r.vi}`);
+              }
+              if (isFirst || isLast || isMilestone || triggered) {
+                kept.push({...r, _reasons: reasons});
+              }
+            });
+            return kept;
+          })();
 
           // ── Build events ──
           const events = [];
 
           importantInbody.forEach((r, i) => {
             const flags = [];
-            if (r.w === peakW)  flags.push({icon:"⚖️", txt:"Peso máximo",      col:"#ff7a4d"});
-            if (r.m === peakM)  flags.push({icon:"💪", txt:"Récord músculo",    col:"#3ddc84"});
-            if (r.f === minF)   flags.push({icon:"🔥", txt:"Mínimo % grasa",   col:"#a8ff3e"});
-            if (r.f === maxF)   flags.push({icon:"⚠️", txt:"Peor % grasa",     col:"#ff4d4d"});
-            if ((r.vi||0)>=10)  flags.push({icon:"🩺", txt:`Visceral alto (${r.vi})`, col:"#ff9940"});
-            if (i===0)          flags.push({icon:"📍", txt:"Medición inicial",  col:"#8888a8"});
-            if (i===importantInbody.length-1 && i>0) flags.push({icon:"📍", txt:"Última medición", col:"#4dc8ff"});
-
-            // Delta vs previous in importantInbody
-            let delta = null;
-            if (i > 0) {
-              const prev = importantInbody[i-1];
-              delta = {
-                dW: prev.w!=null && r.w!=null ? (r.w-prev.w).toFixed(1) : null,
-                dM: prev.m!=null && r.m!=null ? (r.m-prev.m).toFixed(1) : null,
-                dF: prev.f!=null && r.f!=null ? (r.f-prev.f).toFixed(1) : null,
-              };
-            }
+            if (r.w === peakW)  flags.push({icon:"⚖️", txt:"Peso máximo",    col:"#ff7a4d"});
+            if (r.m === peakM)  flags.push({icon:"💪", txt:"Récord músculo",  col:"#3ddc84"});
+            if (r.f === minF)   flags.push({icon:"🔥", txt:"Mínimo grasa",    col:"#a8ff3e"});
+            if (r.f === maxF)   flags.push({icon:"⚠️", txt:"Peor % grasa",    col:"#ff4d4d"});
 
             const src    = r.source || "inbody";
             const srcCol = {inbody:"#4dc8ff",renpho:"#a8ff3e",manual:"#8888a8"}[src] || "#4dc8ff";
             events.push({
               date: r.d, type:"body", icon:"📊", color:srcCol,
               title: `${r.w}kg · ${r.m??'—'}kg M · ${r.f??'—'}% G${r.vi?` · Visceral ${r.vi}`:""}`,
-              subtitle: r.note && !r.note.includes("HOY") && !r.note.includes("◀") ? r.note : null,
-              flags, delta, data:r,
+              // Show WHY this event was kept — the actionable reason
+              reason: r._reasons?.length ? r._reasons.join(" · ") : null,
+              flags, data:r,
             });
           });
 
@@ -4314,7 +4322,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             <div>
               <div className="sec-h">Metabolic Timeline</div>
               <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
-                Hitos y cambios significativos — mediciones con Δ≥{W_THR}kg peso / Δ≥{M_THR}kg músculo / Δ≥{F_THR}% grasa · todos los labs y fotos.
+                Solo eventos con cambios relevantes: Δ≥{W_THR}kg peso · Δ≥{M_THR}kg músculo · Δ≥{F_THR}% grasa (acumulado vs último hito). Todos los labs.
               </p>
 
               {/* Summary pills */}
@@ -4360,30 +4368,24 @@ Analiza este día y responde SOLO JSON sin backticks:
                           </div>
                           {/* Title */}
                           <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,lineHeight:1.3,
-                            marginBottom:(evt.subtitle||evt.flags?.length||evt.delta)?5:0}}>
+                            marginBottom:5}}>
                             {evt.title}
                           </div>
-                          {/* Subtitle */}
-                          {evt.subtitle && (
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",
-                              marginBottom:(evt.flags?.length||evt.delta)?5:0}}>{evt.subtitle}</div>
-                          )}
-                          {/* Delta badges */}
-                          {evt.delta && (evt.delta.dW||evt.delta.dM||evt.delta.dF) && (
-                            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:evt.flags?.length?5:0}}>
-                              {[
-                                [evt.delta.dW,"kg","#8888a8",v=>parseFloat(v)<-0.5?"#3ddc84":parseFloat(v)>1?"#ff7a4d":"#8888a8"],
-                                [evt.delta.dM,"kg M","#4dc8ff",v=>parseFloat(v)>0?"#3ddc84":parseFloat(v)<-0.3?"#ff4d4d":"#8888a8"],
-                                [evt.delta.dF,"% G","#ff7a4d",v=>parseFloat(v)<0?"#3ddc84":parseFloat(v)>1?"#ff4d4d":"#8888a8"],
-                              ].map(([v,unit,_,colFn])=>v!=null&&(
-                                <span key={unit} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",
-                                  color:colFn(v),background:"#1a1a22",borderRadius:2,padding:"2px 7px"}}>
-                                  {parseFloat(v)>0?"+":""}{v}{unit}
-                                </span>
-                              ))}
+                          {/* WHY this event was included — the key insight */}
+                          {evt.reason && (
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",
+                              color:"#e8e8f0",background:"#1a1a22",borderRadius:3,
+                              padding:"6px 10px",marginBottom:evt.flags?.length?6:0,lineHeight:1.5,
+                              borderLeft:`2px solid ${evt.color}`}}>
+                              {evt.reason}
                             </div>
                           )}
-                          {/* Flags */}
+                          {/* Lab subtitle (date label) */}
+                          {evt.subtitle && !evt.reason && (
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",
+                              marginBottom:evt.flags?.length?5:0}}>{evt.subtitle}</div>
+                          )}
+                          {/* Milestone / hard flags */}
                           {evt.flags?.length>0 && (
                             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                               {evt.flags.map((f,fi)=>(
