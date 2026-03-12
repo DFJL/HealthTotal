@@ -3130,6 +3130,106 @@ Analiza este día y responde SOLO JSON sin backticks:
             </div>
             )}
 
+            {/* ── BODY RECOMPOSITION INDEX ── */}
+            {lastFI && lastFI.m != null && lastFI.f != null && (()=>{
+              const fatMass   = parseFloat((lastFI.w * lastFI.f / 100).toFixed(1));
+              const muscleMass= lastFI.m;
+              const mfr       = parseFloat((muscleMass / fatMass).toFixed(2));  // muscle-to-fat ratio
+              const heightM   = (userProfile.height || 175) / 100;
+              const leanMass  = lastFI.w * (1 - lastFI.f / 100);
+              const ffmi      = parseFloat((leanMass / (heightM * heightM)).toFixed(1));
+              const whr       = lastFI.whr || null;
+
+              // Trend: compare last 2 inbody
+              const prev2 = filteredInbody.length >= 2 ? filteredInbody[filteredInbody.length - 2] : null;
+              const dM = prev2 && lastFI.m != null && prev2.m != null ? parseFloat((lastFI.m - prev2.m).toFixed(1)) : null;
+              const dF = prev2 && lastFI.f != null && prev2.f != null ? parseFloat((lastFI.f - prev2.f).toFixed(1)) : null;
+
+              let recompStatus, recompColor, recompIcon;
+              if (dM !== null && dF !== null) {
+                if (dM > 0.1 && dF < -0.2)       { recompStatus = "Recomposición activa";  recompColor = "#a8ff3e"; recompIcon = "🔥"; }
+                else if (dM > 0.1 && dF >= -0.2)  { recompStatus = "Ganando masa";          recompColor = "#4dc8ff"; recompIcon = "💪"; }
+                else if (dM <= 0.1 && dF < -0.2)  { recompStatus = "Perdiendo grasa";       recompColor = "#ffb830"; recompIcon = "📉"; }
+                else if (dM < -0.1 && dF > 0.2)   { recompStatus = "Deterioro muscular";    recompColor = "#ff4d4d"; recompIcon = "⚠️"; }
+                else                               { recompStatus = "Mantenimiento";          recompColor = "#8888a8"; recompIcon = "→"; }
+              } else {
+                recompStatus = "Sin tendencia aún"; recompColor = "#8888a8"; recompIcon = "📊";
+              }
+
+              // FFMI classification
+              const ffmiLabel = ffmi >= 24 ? "Muy atlético" : ffmi >= 22 ? "Atlético" : ffmi >= 20 ? "Por encima del promedio" : ffmi >= 18 ? "Promedio" : "Por debajo del promedio";
+              const ffmiColor = ffmi >= 22 ? "#a8ff3e" : ffmi >= 20 ? "#3ddc84" : ffmi >= 18 ? "#ffb830" : "#ff7a4d";
+
+              // MFR classification
+              const mfrLabel = mfr >= 2.5 ? "Excelente" : mfr >= 2.0 ? "Buena" : mfr >= 1.5 ? "Moderada" : "Mejorable";
+              const mfrColor = mfr >= 2.5 ? "#a8ff3e" : mfr >= 2.0 ? "#3ddc84" : mfr >= 1.5 ? "#ffb830" : "#ff7a4d";
+
+              return (
+                <div style={{marginBottom:20}}>
+                  <div className="sec-h">Body Recomposition Index</div>
+                  <div className="card" style={{marginBottom:12,borderTop:`2px solid ${recompColor}`}}>
+                    {/* Status hero row */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:28}}>{recompIcon}</span>
+                        <div>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:recompColor}}>{recompStatus}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:2}}>
+                            {dM !== null ? `Δ músculo ${dM > 0 ? "+" : ""}${dM} kg · Δ grasa ${dF > 0 ? "+" : ""}${dF}% vs medición anterior` : "Se necesitan ≥2 mediciones para tendencia"}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",textAlign:"right"}}>
+                        Músculo: <strong style={{color:"#3ddc84"}}>{muscleMass} kg</strong> · Grasa: <strong style={{color:"#ffb830"}}>{fatMass} kg</strong>
+                      </div>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                      {/* MFR */}
+                      <div style={{background:"#0c0c0f",borderRadius:3,padding:"10px 12px",borderTop:`1px solid ${mfrColor}`}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>RATIO M/G</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:mfrColor,lineHeight:1}}>{mfr}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:mfrColor,marginTop:3}}>{mfrLabel}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>músculo ÷ grasa (kg)</div>
+                      </div>
+                      {/* FFMI */}
+                      <div style={{background:"#0c0c0f",borderRadius:3,padding:"10px 12px",borderTop:`1px solid ${ffmiColor}`}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>FFMI</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:ffmiColor,lineHeight:1}}>{ffmi}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:ffmiColor,marginTop:3}}>{ffmiLabel}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>masa magra/altura²</div>
+                      </div>
+                      {/* WHR */}
+                      <div style={{background:"#0c0c0f",borderRadius:3,padding:"10px 12px",borderTop:`1px solid ${whr?(whr<0.90?"#a8ff3e":whr<0.95?"#ffb830":"#ff4d4d"):"#2a2a38"}`}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>WHR</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:whr?(whr<0.90?"#a8ff3e":whr<0.95?"#ffb830":"#ff4d4d"):"#44445a",lineHeight:1}}>{whr??'—'}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:whr?(whr<0.90?"#a8ff3e":whr<0.95?"#ffb830":"#ff4d4d"):"#44445a",marginTop:3}}>{whr?(whr<0.90?"Óptimo":whr<0.95?"Riesgo moderado":"Riesgo alto"):"Sin dato"}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>cintura/cadera (meta &lt;0.90)</div>
+                      </div>
+                    </div>
+
+                    {/* Progress bar: muscle vs fat composition */}
+                    <div style={{marginTop:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:4}}>
+                        <span>Composición corporal</span>
+                        <span>Magra {(100-lastFI.f).toFixed(1)}% · Grasa {lastFI.f}%</span>
+                      </div>
+                      <div style={{height:6,borderRadius:3,background:"#1a1a22",overflow:"hidden",display:"flex"}}>
+                        <div style={{flex:100-lastFI.f,background:"#3ddc84",transition:"flex .4s"}}/>
+                        <div style={{flex:lastFI.f,background:"#ffb830",transition:"flex .4s"}}/>
+                      </div>
+                      <div style={{display:"flex",gap:12,marginTop:4,fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>
+                        <span style={{color:"#3ddc84"}}>● Masa magra {(leanMass).toFixed(1)} kg</span>
+                        <span style={{color:"#ffb830"}}>● Grasa {fatMass} kg</span>
+                        <span>Meta: músculo ↑ · grasa ↓</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── CHART: Aggregation controls + chart ── */}
             {(()=>{
               const chartData = aggregate(filteredInbody, inbodyAgg);
@@ -3778,6 +3878,40 @@ ${generatedRoutine.notes?`<div class="footer"><strong>📝 Notas:</strong> ${gen
             insights.push({type:"good",icon:"✅",title:"Consistencia excelente",text:`${abPct14}% de comidas A/B en 14 días. La consistencia es el principal driver de tu recomposición. Mantén el patrón.`});
           if(muscleGain>0)
             insights.push({type:"good",icon:"💪",title:`Masa muscular +${muscleGain}kg`,text:`Tu protocolo nutricional está funcionando. Sigue priorizando proteína post-entreno y mantén el superávit calórico moderado en días de entreno.`});
+
+          // ── Detección de Estancamiento (plateau) ──
+          {
+            const last4weeks = allInbody
+              .filter(r => r.d && r.w != null)
+              .slice(-6); // últimas 6 mediciones para tener contexto
+            if (last4weeks.length >= 3) {
+              const recentW = last4weeks.slice(-4).map(r => r.w);
+              const wMax = Math.max(...recentW);
+              const wMin = Math.min(...recentW);
+              const wRange = parseFloat((wMax - wMin).toFixed(1));
+              const recentF = last4weeks.slice(-4).map(r => r.f).filter(v => v != null);
+              const fRange = recentF.length >= 2 ? parseFloat((Math.max(...recentF) - Math.min(...recentF)).toFixed(1)) : null;
+              // Plateau: peso varía < 0.6kg Y adherencia nutricional > 75%
+              const isWeightPlateau = wRange < 0.6 && recentW.length >= 3;
+              const isFatPlateau = fRange !== null && fRange < 0.5 && recentF.length >= 3;
+              const adherencia = abPct14;
+              if (isWeightPlateau && adherencia >= 75) {
+                insights.push({
+                  type:"warn",
+                  icon:"📊",
+                  title:"Posible estancamiento detectado",
+                  text:`El peso ha oscilado solo ${wRange} kg en las últimas ${recentW.length} mediciones (rango ${wMin}–${wMax} kg) con ${adherencia}% de adherencia nutricional.${isFatPlateau?" % grasa también estancada.":""} Opciones: refeed day, semana de descarga en entreno, ajustar déficit calórico, o simplemente confirmar con la próxima medición.`
+                });
+              } else if (isWeightPlateau && adherencia < 60) {
+                insights.push({
+                  type:"warn",
+                  icon:"⚠️",
+                  title:"Peso estancado — revisar adherencia",
+                  text:`Peso varía < ${wRange} kg en las últimas mediciones pero adherencia nutricional es ${adherencia}%. El peso no cambia porque el tracking es inconsistente. Registrar todo por 7 días dará una imagen real.`
+                });
+              }
+            }
+          }
 
           return (
           <div>
