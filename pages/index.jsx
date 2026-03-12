@@ -3925,27 +3925,85 @@ Analiza este día y responde SOLO JSON sin backticks:
           return (
           <div className="fade-in" style={{padding:"28px 24px",maxWidth:700,margin:"0 auto"}}>
 
-            {/* ── Big Score ── */}
-            <div style={{display:"flex",alignItems:"center",gap:24,marginBottom:28}}>
-              <div style={{position:"relative",width:96,height:96,flexShrink:0}}>
-                <svg viewBox="0 0 96 96" style={{width:96,height:96,transform:"rotate(-90deg)"}}>
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="#1a1a22" strokeWidth="8"/>
-                  {ms && <circle cx="48" cy="48" r="40" fill="none" stroke={scoreColor} strokeWidth="8"
-                    strokeDasharray={`${ms.score*2.513} 251.3`} strokeLinecap="round"/>}
-                </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:scoreColor,lineHeight:1}}>{ms?.score ?? "—"}</span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em"}}>/ 100</span>
+            {/* ── Semicircle Gauge ── */}
+            {(()=>{
+              const score = ms?.score ?? null;
+              // Needle: 0→180deg mapped to score 0→100
+              // SVG gauge: semicircle from 180° to 0° (left to right)
+              const W=340, H=190, cx=W/2, cy=H-10, R=130, rInner=80;
+              // Needle angle: score 0 = 180° (left), score 100 = 0° (right)
+              const angleDeg = score!=null ? 180 - (score/100)*180 : 180;
+              const angleRad = angleDeg * Math.PI / 180;
+              const nx = cx + (R-10)*Math.cos(angleRad);
+              const ny = cy - (R-10)*Math.sin(angleRad);
+              const negItems = ["Falta de sueño","Alimentos azucarados","Estrés crónico","Sedentarismo"];
+              const posItems = ["Proteína alta","Ejercicio regular","Grasas saludables","Tracking diario"];
+              return (
+                <div style={{marginBottom:28}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:12,textAlign:"center"}}>METABOLIC HEALTH SCORE</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+                    {/* Negative factors */}
+                    <div style={{textAlign:"right",minWidth:110}}>
+                      {negItems.map(t=>(
+                        <div key={t} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff7a4d",marginBottom:5,letterSpacing:".02em"}}>{t}</div>
+                      ))}
+                    </div>
+                    {/* SVG Gauge */}
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"min(340px,100%)",height:"auto",overflow:"visible"}}>
+                      <defs>
+                        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%"   stopColor="#ff6b6b"/>
+                          <stop offset="40%"  stopColor="#ffb830"/>
+                          <stop offset="70%"  stopColor="#d4f574"/>
+                          <stop offset="100%" stopColor="#3ddc84"/>
+                        </linearGradient>
+                        <filter id="needleGlow">
+                          <feGaussianBlur stdDeviation="2" result="blur"/>
+                          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                      </defs>
+                      {/* Outer arc (thick) */}
+                      <path d={`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`}
+                        fill="none" stroke="url(#gaugeGrad)" strokeWidth="36" strokeLinecap="butt" opacity="0.9"/>
+                      {/* Inner cutout to make it look like a ring */}
+                      <path d={`M ${cx-rInner} ${cy} A ${rInner} ${rInner} 0 0 1 ${cx+rInner} ${cy}`}
+                        fill="#0c0c0f" stroke="none"/>
+                      {/* Base line */}
+                      <line x1={cx-R-8} y1={cy} x2={cx+R+8} y2={cy} stroke="#2a2a38" strokeWidth="1"/>
+                      {/* Needle */}
+                      {score!=null && (
+                        <g filter="url(#needleGlow)">
+                          <line x1={cx} y1={cy} x2={nx} y2={ny}
+                            stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
+                          <circle cx={cx} cy={cy} r="6" fill="#1a1a22" stroke="white" strokeWidth="2"/>
+                        </g>
+                      )}
+                      {/* Score label */}
+                      <text x={cx} y={cy-18} textAnchor="middle"
+                        fontFamily="Syne,sans-serif" fontWeight="800" fontSize="38" fill={scoreColor}>
+                        {score ?? "—"}
+                      </text>
+                      <text x={cx} y={cy-2} textAnchor="middle"
+                        fontFamily="JetBrains Mono,monospace" fontSize="11" fill="#44445a">/ 100</text>
+                      {/* Poor / Optimal labels */}
+                      <text x={cx-R+4} y={cy+16} textAnchor="middle"
+                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#8888a8">Bajo</text>
+                      <text x={cx+R-4} y={cy+16} textAnchor="middle"
+                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#8888a8">Óptimo</text>
+                      {/* Status label */}
+                      <text x={cx} y={cy+28} textAnchor="middle"
+                        fontFamily="Syne,sans-serif" fontWeight="700" fontSize="13" fill={scoreColor}>{statusLabel}</text>
+                    </svg>
+                    {/* Positive factors */}
+                    <div style={{textAlign:"left",minWidth:110}}>
+                      {posItems.map(t=>(
+                        <div key={t} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginBottom:5,letterSpacing:".02em"}}>{t}</div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:4}}>METABOLIC HEALTH SCORE</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:scoreColor,lineHeight:1,marginBottom:6}}>{statusLabel}</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
-                  {ms ? `Basado en ${ms.components.length} indicadores disponibles` : "Agrega labs e InBody para calcular tu score"}
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {ms && (<>
 
@@ -4063,8 +4121,193 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             )}
 
-            {/* ══ HEALTH TRAJECTORY ══ */}
-            {(()=>{
+
+
+                {tab==="timeline" && (()=>{
+          const today = todayStr();
+
+          // ── Pre-clean ──
+          const validInbody = allInbody.filter(r =>
+            r.d <= today && r.w > 0 && (r.m == null || r.m > 0)
+          );
+          const allW = validInbody.map(r=>r.w).filter(Boolean);
+          const allM = validInbody.map(r=>r.m).filter(v=>v!=null&&v>0);
+          const allF = validInbody.map(r=>r.f).filter(v=>v!=null&&v>0);
+          const peakW = allW.length ? Math.max(...allW) : null;
+          const peakM = allM.length ? Math.max(...allM) : null;
+          const minF  = allF.length ? Math.min(...allF) : null;
+          const maxF  = allF.length ? Math.max(...allF) : null;
+
+          const W_PCT=0.06, M_PCT=0.08, F_ABS=4.0, VI_THR=3;
+
+          const filterBySource = (entries) => {
+            const cleaned = entries.map((r,i) => {
+              if (i===0 && entries.length>1) {
+                const nx=entries[1];
+                if (r.m>0 && nx.m>0 && Math.abs(r.m-nx.m)/nx.m>0.25) return {...r,m:null,_mSuspect:true};
+              }
+              return r;
+            });
+            const kept=[];
+            cleaned.forEach((r,i)=>{
+              const isFirst=i===0, isLast=i===cleaned.length-1;
+              const isMilestone=r.w===peakW||(!r._mSuspect&&r.m>0&&r.m===peakM)||(r.f>0&&r.f===minF)||(r.f>0&&r.f===maxF);
+              const ref=kept.length?kept[kept.length-1]:null;
+              const pctW=(ref?.w>0&&r.w>0)?Math.abs(r.w-ref.w)/ref.w:0;
+              const pctM=(ref?.m>0&&r.m>0)?Math.abs(r.m-ref.m)/ref.m:0;
+              const absF=(ref?.f>0&&r.f>0)?Math.abs(r.f-ref.f):0;
+              const absVI=(ref?.vi!=null&&r.vi!=null)?Math.abs(r.vi-ref.vi):0;
+              const triggered=pctW>=W_PCT||pctM>=M_PCT||absF>=F_ABS||absVI>=VI_THR;
+              const reasons=[];
+              if(isFirst)reasons.push("Punto de partida");
+              if(isLast&&!isFirst)reasons.push("Estado actual");
+              if(r.w===peakW)reasons.push(`Peso máximo (${r.w} kg)`);
+              if(!r._mSuspect&&r.m>0&&r.m===peakM)reasons.push(`Récord músculo (${r.m} kg)`);
+              if(r.f>0&&r.f===minF)reasons.push(`Mínimo % grasa (${r.f}%)`);
+              if(r.f>0&&r.f===maxF)reasons.push(`Peor % grasa (${r.f}%)`);
+              if(triggered&&ref){
+                if(pctW>=W_PCT){const d=r.w-ref.w,p=(d/ref.w*100).toFixed(0);reasons.push(`Peso ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${p}%) vs ${fmtD(ref.d)}`);}
+                if(pctM>=M_PCT&&!r._mSuspect){const d=r.m-ref.m,p=(d/ref.m*100).toFixed(0);reasons.push(`Músculo ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${p}%) vs ${fmtD(ref.d)}`);}
+                if(absF>=F_ABS){const d=r.f-ref.f;reasons.push(`Grasa ${d>0?"+":""}${d.toFixed(1)} pp vs ${fmtD(ref.d)}`);}
+                if(absVI>=VI_THR)reasons.push(`Visceral ${ref.vi}→${r.vi}`);
+              }
+              if(isFirst||isLast||isMilestone||triggered)kept.push({...r,_reasons:reasons});
+            });
+            return kept;
+          };
+
+          const srcGroups={};
+          validInbody.forEach(r=>{const s=r.source||"inbody";if(!srcGroups[s])srcGroups[s]=[];srcGroups[s].push(r);});
+          const importantInbody=Object.values(srcGroups).flatMap(g=>filterBySource(g)).sort((a,b)=>a.d.localeCompare(b.d));
+
+          const events=[];
+          importantInbody.forEach(r=>{
+            const flags=[];
+            if(r.w===peakW)flags.push({icon:"⚖️",txt:"Peso máximo",col:"#ff7a4d"});
+            if(!r._mSuspect&&r.m>0&&r.m===peakM)flags.push({icon:"💪",txt:"Récord músculo",col:"#3ddc84"});
+            if(r.f>0&&r.f===minF)flags.push({icon:"🔥",txt:"Mínimo grasa",col:"#a8ff3e"});
+            if(r.f>0&&r.f===maxF)flags.push({icon:"⚠️",txt:"Peor % grasa",col:"#ff4d4d"});
+            const src=r.source||"inbody";
+            const srcCol={inbody:"#4dc8ff",renpho:"#a8ff3e",manual:"#8888a8"}[src]||"#4dc8ff";
+            events.push({date:r.d,type:"body",icon:"📊",color:srcCol,
+              title:`${r.w}kg · ${r.m??'—'}kg M · ${r.f??'—'}% G${r.vi?` · V${r.vi}`:""}`,
+              reason:r._reasons?.length?r._reasons.join(" · "):null,flags,data:r});
+          });
+
+          labResults.filter(r=>{
+            const mm={Ene:"01",Feb:"02",Mar:"03",Abr:"04",May:"05",Jun:"06",Jul:"07",Ago:"08",Sep:"09",Oct:"10",Nov:"11",Dic:"12"};
+            let dn=r.date; const lm=r.date?.match(/^([A-Za-z]+)\s+(\d{4})$/);
+            if(lm)dn=`${lm[2]}-${mm[lm[1]]||"01"}-01`;
+            else if(/^\d{4}-\d{2}$/.test(r.date))dn=r.date+"-01";
+            return dn<=today;
+          }).forEach(r=>{
+            const lf=[];
+            if(r.ldl){if(r.ldl>190)lf.push({icon:"🔴",txt:`LDL crítico ${r.ldl}`,col:"#ff4d4d"});else if(r.ldl>130)lf.push({icon:"🟡",txt:`LDL ${r.ldl}`,col:"#ffb830"});else if(r.ldl<=100)lf.push({icon:"✅",txt:`LDL óptimo ${r.ldl}`,col:"#3ddc84"});}
+            if(r.hba1c){if(r.hba1c>=6.5)lf.push({icon:"🔴",txt:`HbA1c ${r.hba1c}%`,col:"#ff4d4d"});else if(r.hba1c>=5.7)lf.push({icon:"🟡",txt:`Prediabetes ${r.hba1c}%`,col:"#ffb830"});else lf.push({icon:"✅",txt:`HbA1c ${r.hba1c}%`,col:"#3ddc84"});}
+            const mm={Ene:"01",Feb:"02",Mar:"03",Abr:"04",May:"05",Jun:"06",Jul:"07",Ago:"08",Sep:"09",Oct:"10",Nov:"11",Dic:"12"};
+            let dn=r.date; const lm=r.date?.match(/^([A-Za-z]+)\s+(\d{4})$/);
+            if(lm)dn=`${lm[2]}-${mm[lm[1]]||"01"}-01`;
+            else if(/^\d{4}-\d{2}$/.test(r.date))dn=r.date+"-01";
+            events.push({date:dn,type:"lab",icon:"🩸",color:"#ff9940",
+              title:`LDL ${r.ldl??'—'} · HDL ${r.hdl??'—'} · TC ${r.tc??'—'}${r.hba1c?` · HbA1c ${r.hba1c}%`:""}`,
+              subtitle:r.date,flags:lf});
+          });
+
+          const photoByMonth={};
+          bodyPhotos.forEach(p=>{const mo=(p.date||"").slice(0,7);if(!photoByMonth[mo]||p.date>photoByMonth[mo].date)photoByMonth[mo]=p;});
+          Object.values(photoByMonth).forEach(p=>{
+            events.push({date:p.date,type:"photo",icon:"📸",color:"#c084fc",
+              title:"Foto de progreso",subtitle:p.note||null,flags:[],
+              img:p.b64?`data:image/jpeg;base64,${p.b64}`:null});
+          });
+
+          events.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+          const typeLabel={body:"MEDICIÓN",lab:"LAB",photo:"FOTO",milestone:"HITO"};
+
+          return (
+            <div>
+              <div className="sec-h">Metabolic Timeline</div>
+              <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
+                Hitos cronológicos — Δ≥6% peso · Δ≥8% músculo · Δ≥4pp grasa (acumulado por fuente). Todos los labs.
+              </p>
+
+              {/* Summary pills */}
+              <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+                {[[importantInbody.length,"Mediciones clave","#4dc8ff"],[labResults.length,"Labs","#ff9940"],[Object.keys(photoByMonth).length,"Fotos","#c084fc"]].map(([v,l,col])=>(
+                  <div key={l} style={{background:"#131318",border:`1px solid ${col}33`,borderRadius:4,padding:"8px 14px",display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:col}}>{v}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".06em"}}>{l}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── HORIZONTAL TIMELINE ── */}
+              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:32,paddingBottom:8}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:0,minWidth:Math.max(events.length*160,320),position:"relative",paddingTop:8}}>
+
+                  {/* Horizontal connector line */}
+                  <div style={{position:"absolute",top:24,left:20,right:20,height:2,
+                    background:"linear-gradient(to right,#2a2a38,#a8ff3e55,#2a2a38)",zIndex:0}}/>
+
+                  {events.map((evt,i)=>(
+                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",position:"relative",zIndex:1,minWidth:150,maxWidth:220}}>
+                      {/* Dot */}
+                      <div style={{width:16,height:16,borderRadius:"50%",background:evt.color,
+                        boxShadow:`0 0 8px ${evt.color}88`,border:"2px solid #0c0c0f",
+                        marginBottom:10,flexShrink:0,zIndex:2}}/>
+                      {/* Card — alternate above/below for dense timelines */}
+                      <div style={{
+                        background:"#131318",border:`1px solid ${evt.color}30`,
+                        borderTop:`3px solid ${evt.color}`,borderRadius:4,
+                        padding:"10px 11px",width:"calc(100% - 16px)",textAlign:"left"}}>
+                        {/* Date + type */}
+                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap"}}>
+                          <span style={{fontSize:13}}>{evt.icon}</span>
+                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{fmtD(evt.date)}</span>
+                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
+                            color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 4px",letterSpacing:".06em"}}>
+                            {typeLabel[evt.type]||evt.type}
+                          </span>
+                        </div>
+                        {/* Title */}
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:11,lineHeight:1.3,marginBottom:evt.reason||evt.flags?.length?5:0}}>
+                          {evt.title}
+                        </div>
+                        {/* Reason box */}
+                        {evt.reason && (
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+                            color:"#e8e8f0",background:"#1a1a22",borderRadius:2,
+                            padding:"4px 7px",marginBottom:evt.flags?.length?4:0,lineHeight:1.5,
+                            borderLeft:`2px solid ${evt.color}`}}>
+                            {evt.reason}
+                          </div>
+                        )}
+                        {/* Lab subtitle */}
+                        {evt.subtitle && !evt.reason && (
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#8888a8",
+                            marginBottom:evt.flags?.length?4:0}}>{evt.subtitle}</div>
+                        )}
+                        {/* Flags */}
+                        {evt.flags?.length>0 && (
+                          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                            {evt.flags.map((f,fi)=>(
+                              <span key={fi} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
+                                color:f.col,background:f.col+"15",borderRadius:8,padding:"1px 5px"}}>
+                                {f.icon} {f.txt}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Photo */}
+                        {evt.img && <img src={evt.img} alt="" style={{marginTop:6,width:"100%",maxHeight:70,objectFit:"cover",borderRadius:2}}/>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ══ HEALTH TRAJECTORY (moved from SCORE) ══ */}
+              {(()=>{
               if (allInbody.length < 2 && labResults.length < 2) return (
                 <div>
                   <div className="sec-h">Trayectoria de Salud</div>
@@ -4172,297 +4415,6 @@ Analiza este día y responde SOLO JSON sin backticks:
           );
         })()}
 
-        {tab==="timeline" && (()=>{
-          // ── Globals ──
-          const today = todayStr();
-
-          // ── Pre-clean: discard future dates + entries with zero/null weight ──
-          const validInbody = allInbody.filter(r =>
-            r.d <= today &&          // no future dates
-            r.w > 0 &&               // must have real weight
-            (r.m == null || r.m > 0) // muscle 0 = bad data (Renpho often omits it)
-          );
-
-          const allW = validInbody.map(r=>r.w).filter(Boolean);
-          const allM = validInbody.map(r=>r.m).filter(v=>v!=null && v>0);
-          const allF = validInbody.map(r=>r.f).filter(v=>v!=null && v>0);
-          const peakW = allW.length ? Math.max(...allW) : null;
-          const peakM = allM.length ? Math.max(...allM) : null;
-          const minF  = allF.length ? Math.min(...allF) : null;
-          const maxF  = allF.length ? Math.max(...allF) : null;
-
-          // ── FILTER: % based, per-source, cumulative vs last KEPT entry ──
-          const W_PCT  = 0.06;  // 6% body weight
-          const M_PCT  = 0.08;  // 8% muscle (higher — muscle changes slowly)
-          const F_ABS  = 4.0;   // 4 pp fat
-          const VI_THR = 3;     // visceral: 3-level jump
-
-          const filterBySource = (entries) => {
-            // Outlier guard: if entry[0] muscle differs >25% from entry[1], treat entry[0].m as null
-            // (common data entry error in first InBody scan)
-            const cleanedEntries = entries.map((r, i) => {
-              if (i === 0 && entries.length > 1) {
-                const next = entries[1];
-                if (r.m>0 && next.m>0 && Math.abs(r.m-next.m)/next.m > 0.25) {
-                  return {...r, m: null, _mSuspect: true}; // nullify suspect muscle
-                }
-              }
-              return r;
-            });
-
-            const kept = [];
-            cleanedEntries.forEach((r, i) => {
-              const isFirst = i === 0;
-              const isLast  = i === cleanedEntries.length - 1;
-              // Milestone: use cleaned values — don't crown a suspect outlier
-              const isMilestone = r.w===peakW ||
-                (!r._mSuspect && r.m>0 && r.m===peakM) ||
-                (r.f>0 && r.f===minF) ||
-                (r.f>0 && r.f===maxF);
-
-              const ref = kept.length ? kept[kept.length - 1] : null;
-              const pctW = (ref?.w>0 && r.w>0)   ? Math.abs(r.w - ref.w) / ref.w : 0;
-              const pctM = (ref?.m>0 && r.m>0)   ? Math.abs(r.m - ref.m) / ref.m : 0;
-              const absF = (ref?.f>0 && r.f>0)   ? Math.abs(r.f - ref.f) : 0;
-              const absVI= (ref?.vi!=null && r.vi!=null) ? Math.abs(r.vi - ref.vi) : 0;
-              const triggered = pctW>=W_PCT || pctM>=M_PCT || absF>=F_ABS || absVI>=VI_THR;
-
-              const reasons = [];
-              if (isFirst)             reasons.push("Punto de partida");
-              if (isLast && !isFirst)  reasons.push("Estado actual");
-              if (r.w===peakW)         reasons.push(`Peso máximo (${r.w} kg)`);
-              if (!r._mSuspect && r.m>0 && r.m===peakM) reasons.push(`Récord músculo (${r.m} kg)`);
-              if (r.f>0 && r.f===minF) reasons.push(`Mínimo % grasa (${r.f}%)`);
-              if (r.f>0 && r.f===maxF) reasons.push(`Peor % grasa (${r.f}%)`);
-              if (triggered && ref) {
-                if (pctW>=W_PCT) {
-                  const d=r.w-ref.w, pct=(d/ref.w*100).toFixed(0);
-                  reasons.push(`Peso ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${pct}%) vs ${fmtD(ref.d)}`);
-                }
-                if (pctM>=M_PCT && !r._mSuspect) {
-                  const d=r.m-ref.m, pct=(d/ref.m*100).toFixed(0);
-                  reasons.push(`Músculo ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${pct}%) vs ${fmtD(ref.d)}`);
-                }
-                if (absF>=F_ABS) {
-                  const d=r.f-ref.f;
-                  reasons.push(`Grasa ${d>0?"+":""}${d.toFixed(1)} pp vs ${fmtD(ref.d)}`);
-                }
-                if (absVI>=VI_THR) reasons.push(`Visceral ${ref.vi}→${r.vi}`);
-              }
-              if (isFirst || isLast || isMilestone || triggered) {
-                kept.push({...r, _reasons: reasons});
-              }
-            });
-            return kept;
-          };
-
-          // Group by source, filter independently, merge, re-sort
-          const srcGroups = {};
-          validInbody.forEach(r => {
-            const s = r.source || "inbody";
-            if (!srcGroups[s]) srcGroups[s] = [];
-            srcGroups[s].push(r);
-          });
-          const importantInbody = Object.values(srcGroups)
-            .flatMap(g => filterBySource(g))
-            .sort((a,b) => a.d.localeCompare(b.d));
-
-          // ── Build events ──
-          const events = [];
-
-          importantInbody.forEach((r, i) => {
-            const flags = [];
-            if (r.w === peakW)  flags.push({icon:"⚖️", txt:"Peso máximo",    col:"#ff7a4d"});
-            if (r.m === peakM)  flags.push({icon:"💪", txt:"Récord músculo",  col:"#3ddc84"});
-            if (r.f === minF)   flags.push({icon:"🔥", txt:"Mínimo grasa",    col:"#a8ff3e"});
-            if (r.f === maxF)   flags.push({icon:"⚠️", txt:"Peor % grasa",    col:"#ff4d4d"});
-
-            const src    = r.source || "inbody";
-            const srcCol = {inbody:"#4dc8ff",renpho:"#a8ff3e",manual:"#8888a8"}[src] || "#4dc8ff";
-            events.push({
-              date: r.d, type:"body", icon:"📊", color:srcCol,
-              title: `${r.w}kg · ${r.m??'—'}kg M · ${r.f??'—'}% G${r.vi?` · Visceral ${r.vi}`:""}`,
-              // Show WHY this event was kept — the actionable reason
-              reason: r._reasons?.length ? r._reasons.join(" · ") : null,
-              flags, data:r,
-            });
-          });
-
-          // All labs — always important (past only)
-          labResults.filter(r => {
-            const monthMap = {Ene:"01",Feb:"02",Mar:"03",Abr:"04",May:"05",Jun:"06",Jul:"07",Ago:"08",Sep:"09",Oct:"10",Nov:"11",Dic:"12"};
-            let dn = r.date;
-            const lm = r.date?.match(/^([A-Za-z]+)\s+(\d{4})$/);
-            if (lm) dn = `${lm[2]}-${monthMap[lm[1]]||"01"}-01`;
-            else if (/^\d{4}-\d{2}$/.test(r.date)) dn = r.date+"-01";
-            return dn <= today;
-          }).forEach(r => {
-            const labFlags = [];
-            if (r.ldl) {
-              if (r.ldl > 190)       labFlags.push({icon:"🔴", txt:`LDL crítico ${r.ldl}`,  col:"#ff4d4d"});
-              else if (r.ldl > 130)  labFlags.push({icon:"🟡", txt:`LDL elevado ${r.ldl}`,  col:"#ffb830"});
-              else if (r.ldl <= 100) labFlags.push({icon:"✅", txt:`LDL óptimo ${r.ldl}`,   col:"#3ddc84"});
-            }
-            if (r.hba1c) {
-              if (r.hba1c >= 6.5)      labFlags.push({icon:"🔴", txt:`HbA1c diabético ${r.hba1c}%`, col:"#ff4d4d"});
-              else if (r.hba1c >= 5.7) labFlags.push({icon:"🟡", txt:`Prediabetes ${r.hba1c}%`,     col:"#ffb830"});
-              else                     labFlags.push({icon:"✅", txt:`HbA1c normal ${r.hba1c}%`,     col:"#3ddc84"});
-            }
-            if (r.tg && r.hdl) {
-              const ratio = (r.tg/r.hdl).toFixed(1);
-              labFlags.push(ratio > 3.5
-                ? {icon:"⚠️", txt:`TG/HDL alto ${ratio}`,    col:"#ff9940"}
-                : ratio <= 2
-                ? {icon:"✅", txt:`TG/HDL óptimo ${ratio}`,  col:"#3ddc84"}
-                : {icon:"📊", txt:`TG/HDL ${ratio}`,         col:"#8888a8"}
-              );
-            }
-            const monthMap = {Ene:"01",Feb:"02",Mar:"03",Abr:"04",May:"05",Jun:"06",Jul:"07",Ago:"08",Sep:"09",Oct:"10",Nov:"11",Dic:"12"};
-            let dateNorm = r.date;
-            const legMatch = r.date?.match(/^([A-Za-z]+)\s+(\d{4})$/);
-            if (legMatch) dateNorm = `${legMatch[2]}-${monthMap[legMatch[1]]||"01"}-01`;
-            else if (/^\d{4}-\d{2}$/.test(r.date)) dateNorm = r.date+"-01";
-            events.push({
-              date:dateNorm, type:"lab", icon:"🩸", color:"#ff9940",
-              title:`LDL ${r.ldl??'—'} · HDL ${r.hdl??'—'} · TC ${r.tc??'—'}${r.hba1c?` · HbA1c ${r.hba1c}%`:""}`,
-              subtitle: r.date, flags:labFlags,
-            });
-          });
-
-          // Food log milestone — only first day
-          const logDays = Object.keys(log).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-          if (logDays.length > 0) {
-            events.push({
-              date:logDays[0], type:"milestone", icon:"🚀", color:"#a8ff3e",
-              title:"Inicio del tracking nutricional",
-              subtitle:`${logDays.length} días registrados en total`,
-              flags:[],
-            });
-          }
-
-          // Photos — only keep 1 per month (most recent of each month)
-          const photoByMonth = {};
-          bodyPhotos.forEach(p => {
-            const mo = (p.date||"").slice(0,7);
-            if (!photoByMonth[mo] || p.date > photoByMonth[mo].date) photoByMonth[mo] = p;
-          });
-          Object.values(photoByMonth).forEach(p => {
-            events.push({
-              date:p.date, type:"photo", icon:"📸", color:"#c084fc",
-              title:"Foto de progreso",
-              subtitle: p.note||null, flags:[],
-              img: p.b64 ? `data:image/jpeg;base64,${p.b64}` : null,
-            });
-          });
-
-          events.sort((a,b)=>(b.date||"").localeCompare(a.date||"")); // newest first
-
-          // Group by year
-          const byYear = {};
-          events.forEach(e => {
-            const yr=(e.date||"????").slice(0,4);
-            if(!byYear[yr]) byYear[yr]=[];
-            byYear[yr].push(e);
-          });
-          const years = Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
-
-          const typeColor = {body:"#4dc8ff",lab:"#ff9940",photo:"#c084fc",milestone:"#a8ff3e"};
-          const typeLabel = {body:"MEDICIÓN",lab:"LAB",photo:"FOTO",milestone:"HITO"};
-
-          return (
-            <div>
-              <div className="sec-h">Metabolic Timeline</div>
-              <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
-                Solo eventos con cambios relevantes: ≥{(W_PCT*100).toFixed(0)}% peso · ≥{(M_PCT*100).toFixed(0)}% músculo · ≥{F_ABS}pp grasa (acumulado vs último hito por fuente). Todos los labs.
-              </p>
-
-              {/* Summary pills */}
-              <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-                {[[importantInbody.length,"Mediciones clave","#4dc8ff"],[labResults.length,"Labs","#ff9940"],[Object.keys(photoByMonth).length,"Fotos","#c084fc"]].map(([v,l,col])=>(
-                  <div key={l} style={{background:"#131318",border:`1px solid ${col}33`,borderRadius:4,padding:"8px 14px",display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:col}}>{v}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".06em"}}>{l}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Timeline */}
-              <div style={{position:"relative",paddingLeft:52}}>
-                <div style={{position:"absolute",left:19,top:8,bottom:8,width:2,background:"linear-gradient(to bottom,#a8ff3e44,#2a2a38,#1a1a22)",borderRadius:2}}/>
-
-                {years.map(yr=>(
-                  <div key={yr}>
-                    {/* Year marker */}
-                    <div style={{position:"absolute",left:0,width:40,textAlign:"center",marginBottom:8}}>
-                      <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:9,color:"#a8ff3e",letterSpacing:".1em"}}>{yr}</span>
-                    </div>
-                    <div style={{marginBottom:4,paddingTop:2}}>
-                      <div style={{height:1,background:"#2a2a38",marginBottom:16}}/>
-                    </div>
-
-                    {byYear[yr].map((evt,i)=>(
-                      <div key={i} style={{position:"relative",marginBottom:18}}>
-                        {/* Dot on the line */}
-                        <div style={{position:"absolute",left:-39,top:10,width:14,height:14,borderRadius:"50%",
-                          background:evt.color,boxShadow:`0 0 8px ${evt.color}66`,zIndex:2}}/>
-                        {/* Card */}
-                        <div style={{background:"#131318",border:`1px solid ${evt.color}22`,
-                          borderLeft:`3px solid ${evt.color}`,borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
-                          {/* Header */}
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-                            <span style={{fontSize:16}}>{evt.icon}</span>
-                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{fmtD(evt.date)}</span>
-                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
-                              color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 6px",letterSpacing:".08em"}}>
-                              {typeLabel[evt.type]||evt.type.toUpperCase()}
-                            </span>
-                          </div>
-                          {/* Title */}
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,lineHeight:1.3,
-                            marginBottom:5}}>
-                            {evt.title}
-                          </div>
-                          {/* WHY this event was included — the key insight */}
-                          {evt.reason && (
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",
-                              color:"#e8e8f0",background:"#1a1a22",borderRadius:3,
-                              padding:"6px 10px",marginBottom:evt.flags?.length?6:0,lineHeight:1.5,
-                              borderLeft:`2px solid ${evt.color}`}}>
-                              {evt.reason}
-                            </div>
-                          )}
-                          {/* Lab subtitle (date label) */}
-                          {evt.subtitle && !evt.reason && (
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",
-                              marginBottom:evt.flags?.length?5:0}}>{evt.subtitle}</div>
-                          )}
-                          {/* Milestone / hard flags */}
-                          {evt.flags?.length>0 && (
-                            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                              {evt.flags.map((f,fi)=>(
-                                <span key={fi} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
-                                  color:f.col,background:f.col+"15",borderRadius:10,padding:"2px 8px",letterSpacing:".04em"}}>
-                                  {f.icon} {f.txt}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {/* Photo */}
-                          {evt.img && (
-                            <img src={evt.img} alt="progreso"
-                              style={{marginTop:8,maxWidth:100,maxHeight:90,objectFit:"cover",borderRadius:3,border:"1px solid #2a2a38"}}/>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {events.length===0 && (
-                  <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
-                    SIN EVENTOS — agrega mediciones o labs para ver tu timeline
-                  </div>
-                )}
-              </div>
             </div>
           );
         })()}
