@@ -2589,24 +2589,34 @@ Analiza este día y responde SOLO JSON sin backticks:
               ? (data.length>60?'monthly':data.length>20?'weekly':'raw')
               : mode;
             if (effMode==='raw') return data.map(r=>({...r, dLabel:fmtD(r.d)}));
+            const avg = arr => arr.length ? parseFloat((arr.reduce((s,v)=>s+v,0)/arr.length).toFixed(1)) : null;
             const groups = {};
             data.forEach(r => {
-              const [y,m,d] = r.d.split('-').map(Number);
-              const key = effMode==='monthly'
-                ? `${y}-${String(m).padStart(2,'0')}`
-                : (() => {
-                    const date = new Date(y, m-1, d||1);
-                    const dow = date.getDay();
-                    const mon = new Date(date); mon.setDate(d-(dow===0?6:dow-1));
-                    return mon.toISOString().slice(0,10);
-                  })();
+              // Guard: only process valid ISO dates YYYY-MM-DD or YYYY-MM
+              if (!/^\d{4}-\d{2}/.test(r.d)) return;
+              const parts = r.d.split('-');
+              const y = parseInt(parts[0]);
+              const m = parseInt(parts[1]);
+              const d = parseInt(parts[2] || '1') || 1;
+              if (!y || !m) return;
+              let key;
+              if (effMode==='monthly') {
+                key = `${y}-${String(m).padStart(2,'0')}`;
+              } else {
+                // Weekly: find the Monday of this week safely
+                const date = new Date(y, m-1, d);
+                const dow = date.getDay(); // 0=Sun, 1=Mon...
+                const daysToMon = dow===0 ? 6 : dow-1;
+                const mon = new Date(date);
+                mon.setDate(mon.getDate() - daysToMon); // always safe via getDate()
+                key = `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
+              }
               if (!groups[key]) groups[key] = [];
               groups[key].push(r);
             });
-            const avg = arr => arr.length ? parseFloat((arr.reduce((s,v)=>s+v,0)/arr.length).toFixed(1)) : null;
             return Object.entries(groups).sort(([a],[b])=>a.localeCompare(b)).map(([key,rows])=>({
               d: key,
-              dLabel: effMode==='monthly' ? fmtD(key+'-01') : ('S '+fmtD(key)),
+              dLabel: effMode==='monthly' ? fmtD(key+'-01') : ('S/'+fmtD(key)),
               w: avg(rows.map(r=>r.w).filter(v=>v!=null)),
               m: avg(rows.map(r=>r.m).filter(v=>v!=null)),
               f: avg(rows.map(r=>r.f).filter(v=>v!=null)),
