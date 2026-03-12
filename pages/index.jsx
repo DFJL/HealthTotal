@@ -927,6 +927,7 @@ function AppInner() {
   const [customInbody, setCustomInbody] = useState([]);
   const [inbodySourceFilter, setInbodySourceFilter] = useState('all'); // 'all' | 'inbody' | 'renpho' | 'manual'
   const [inbodyAgg, setInbodyAgg] = useState('auto'); // 'auto' | 'raw' | 'weekly' | 'monthly'
+  const [tlSrc, setTlSrc] = useState('all'); // timeline source filter
   const [tableRows, setTableRows] = useState(15);
   const [bodyMeasurements, setBodyMeasurements] = useState([]);
   const [labResults, setLabResults] = useState([]);
@@ -4254,82 +4255,125 @@ Analiza este día y responde SOLO JSON sin backticks:
                 Hitos cronológicos — Δ≥6% peso · Δ≥8% músculo · Δ≥4pp grasa (acumulado por fuente). Todos los labs.
               </p>
 
-              {/* Summary pills */}
-              <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
-                {[[importantInbody.length,"Mediciones clave","#4dc8ff"],[labResults.length,"Labs","#ff9940"],[Object.keys(photoByMonth).length,"Fotos","#c084fc"]].map(([v,l,col])=>(
-                  <div key={l} style={{background:"#131318",border:`1px solid ${col}33`,borderRadius:4,padding:"8px 14px",display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:col}}>{v}</span>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".06em"}}>{l}</span>
+              {/* ── Source filter ── */}
+              {(()=>{
+                const srcOptions = [{k:'all',l:'TODAS'},{k:'inbody',l:'InBody'},{k:'renpho',l:'Renpho'},{k:'manual',l:'Manual'},{k:'lab',l:'Labs'},{k:'photo',l:'Fotos'}];
+                const srcCol = {inbody:'#4dc8ff',renpho:'#a8ff3e',manual:'#8888a8',lab:'#ff9940',photo:'#c084fc'};
+                return (
+                  <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'8px',color:'#44445a',letterSpacing:'.1em',marginRight:4}}>FUENTE</span>
+                    {srcOptions.map(o=>{
+                      const active = tlSrc===o.k;
+                      const col = srcCol[o.k]||'#8888a8';
+                      return (
+                        <button key={o.k} onClick={()=>setTlSrc(o.k)}
+                          style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'8px',letterSpacing:'.06em',
+                            padding:'4px 10px',borderRadius:3,border:`1px solid ${active?col:'#2a2a38'}`,
+                            background:active?col+'22':'transparent',color:active?col:'#44445a',cursor:'pointer'}}>
+                          {o.l}
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
-              {/* ── HORIZONTAL TIMELINE ── */}
-              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:32,paddingBottom:8}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:0,minWidth:Math.max(events.length*160,320),position:"relative",paddingTop:8}}>
+              {/* Summary pills + filtered timeline */}
+              {(()=>{
+                const filtered = events.filter(e => {
+                  if (tlSrc === 'all') return true;
+                  if (e.type === 'lab')   return tlSrc === 'lab';
+                  if (e.type === 'photo') return tlSrc === 'photo';
+                  // body events: filter by source
+                  const src = e.data?.source || 'inbody';
+                  return tlSrc === src;
+                });
+                const bodyFiltered  = filtered.filter(e=>e.type==='body');
+                const labFiltered   = filtered.filter(e=>e.type==='lab');
+                const photoFiltered = filtered.filter(e=>e.type==='photo');
+                return (
+                  <>
+                  {/* Count pills */}
+                  <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+                    {[[bodyFiltered.length,"Mediciones","#4dc8ff"],[labFiltered.length,"Labs","#ff9940"],[photoFiltered.length,"Fotos","#c084fc"]].map(([v,l,col])=>(
+                      <div key={l} style={{background:"#131318",border:`1px solid ${col}33`,borderRadius:4,padding:"8px 14px",display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:col}}>{v}</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".06em"}}>{l}</span>
+                      </div>
+                    ))}
+                    {tlSrc!=='all' && (
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'8px',color:'#44445a',marginLeft:4}}>
+                        {filtered.length} de {events.length} eventos
+                      </div>
+                    )}
+                  </div>
 
-                  {/* Horizontal connector line */}
-                  <div style={{position:"absolute",top:24,left:20,right:20,height:2,
-                    background:"linear-gradient(to right,#2a2a38,#a8ff3e55,#2a2a38)",zIndex:0}}/>
-
-                  {events.map((evt,i)=>(
-                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",position:"relative",zIndex:1,minWidth:150,maxWidth:220}}>
-                      {/* Dot */}
-                      <div style={{width:16,height:16,borderRadius:"50%",background:evt.color,
-                        boxShadow:`0 0 8px ${evt.color}88`,border:"2px solid #0c0c0f",
-                        marginBottom:10,flexShrink:0,zIndex:2}}/>
-                      {/* Card — alternate above/below for dense timelines */}
-                      <div style={{
-                        background:"#131318",border:`1px solid ${evt.color}30`,
-                        borderTop:`3px solid ${evt.color}`,borderRadius:4,
-                        padding:"10px 11px",width:"calc(100% - 16px)",textAlign:"left"}}>
-                        {/* Date + type */}
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap"}}>
-                          <span style={{fontSize:13}}>{evt.icon}</span>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{fmtD(evt.date)}</span>
-                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
-                            color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 4px",letterSpacing:".06em"}}>
-                            {typeLabel[evt.type]||evt.type}
-                          </span>
-                        </div>
-                        {/* Title */}
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:11,lineHeight:1.3,marginBottom:evt.reason||evt.flags?.length?5:0}}>
-                          {evt.title}
-                        </div>
-                        {/* Reason box */}
-                        {evt.reason && (
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
-                            color:"#e8e8f0",background:"#1a1a22",borderRadius:2,
-                            padding:"4px 7px",marginBottom:evt.flags?.length?4:0,lineHeight:1.5,
-                            borderLeft:`2px solid ${evt.color}`}}>
-                            {evt.reason}
+                  {/* ── HORIZONTAL TIMELINE ── */}
+                  {filtered.length===0 ? (
+                    <div style={{textAlign:"center",padding:"32px 0",color:"#44445a",fontFamily:"'JetBrains Mono',monospace",fontSize:"10px"}}>
+                      Sin eventos para esta fuente
+                    </div>
+                  ) : (
+                    <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginBottom:32,paddingBottom:8}}>
+                      <div style={{display:"flex",alignItems:"flex-start",gap:0,minWidth:Math.max(filtered.length*160,320),position:"relative",paddingTop:8}}>
+                        {/* Rail */}
+                        <div style={{position:"absolute",top:24,left:20,right:20,height:2,
+                          background:"linear-gradient(to right,#2a2a38,#a8ff3e55,#2a2a38)",zIndex:0}}/>
+                        {filtered.map((evt,i)=>(
+                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",position:"relative",zIndex:1,minWidth:150,maxWidth:220}}>
+                            {/* Dot */}
+                            <div style={{width:16,height:16,borderRadius:"50%",background:evt.color,
+                              boxShadow:`0 0 8px ${evt.color}88`,border:"2px solid #0c0c0f",
+                              marginBottom:10,flexShrink:0,zIndex:2}}/>
+                            {/* Card */}
+                            <div style={{background:"#131318",border:`1px solid ${evt.color}30`,
+                              borderTop:`3px solid ${evt.color}`,borderRadius:4,
+                              padding:"10px 11px",width:"calc(100% - 16px)",textAlign:"left"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap"}}>
+                                <span style={{fontSize:13}}>{evt.icon}</span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{fmtD(evt.date)}</span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
+                                  color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 4px",letterSpacing:".06em"}}>
+                                  {typeLabel[evt.type]||evt.type}
+                                </span>
+                              </div>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:11,lineHeight:1.3,marginBottom:evt.reason||evt.flags?.length?5:0}}>
+                                {evt.title}
+                              </div>
+                              {evt.reason && (
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+                                  color:"#e8e8f0",background:"#1a1a22",borderRadius:2,
+                                  padding:"4px 7px",marginBottom:evt.flags?.length?4:0,lineHeight:1.5,
+                                  borderLeft:`2px solid ${evt.color}`}}>
+                                  {evt.reason}
+                                </div>
+                              )}
+                              {evt.subtitle && !evt.reason && (
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#8888a8",
+                                  marginBottom:evt.flags?.length?4:0}}>{evt.subtitle}</div>
+                              )}
+                              {evt.flags?.length>0 && (
+                                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                                  {evt.flags.map((f,fi)=>(
+                                    <span key={fi} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
+                                      color:f.col,background:f.col+"15",borderRadius:8,padding:"1px 5px"}}>
+                                      {f.icon} {f.txt}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {evt.img && <img src={evt.img} alt="" style={{marginTop:6,width:"100%",maxHeight:70,objectFit:"cover",borderRadius:2}}/>}
+                            </div>
                           </div>
-                        )}
-                        {/* Lab subtitle */}
-                        {evt.subtitle && !evt.reason && (
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#8888a8",
-                            marginBottom:evt.flags?.length?4:0}}>{evt.subtitle}</div>
-                        )}
-                        {/* Flags */}
-                        {evt.flags?.length>0 && (
-                          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                            {evt.flags.map((f,fi)=>(
-                              <span key={fi} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",
-                                color:f.col,background:f.col+"15",borderRadius:8,padding:"1px 5px"}}>
-                                {f.icon} {f.txt}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {/* Photo */}
-                        {evt.img && <img src={evt.img} alt="" style={{marginTop:6,width:"100%",maxHeight:70,objectFit:"cover",borderRadius:2}}/>}
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  )}
+                  </>
+                );
+              })()}
 
-              {/* ══ HEALTH TRAJECTORY (moved from SCORE) ══ */}
+                            {/* ══ HEALTH TRAJECTORY (moved from SCORE) ══ */}
               {(()=>{
               if (allInbody.length < 2 && labResults.length < 2) return (
                 <div>
