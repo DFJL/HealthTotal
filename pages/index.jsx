@@ -2792,6 +2792,9 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* Upload new InBody */}
 
+          </div>
+        )}
+
         {/* ══ LABS ══ */}
         {tab==="labs" && (
           <div>
