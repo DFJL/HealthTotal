@@ -4182,46 +4182,69 @@ Analiza este día y responde SOLO JSON sin backticks:
           const minF  = allF.length ? Math.min(...allF) : null;
           const maxF  = allF.length ? Math.max(...allF) : null;
 
-          // ── FILTER: strict thresholds — only genuinely meaningful shifts ──
-          // Delta is cumulative vs last KEPT entry (not adjacent), so streaks accumulate
-          const W_THR  = 3.0;  // kg  — significant weight shift
-          const M_THR  = 1.5;  // kg  — meaningful muscle change
-          const F_THR  = 2.5;  // %   — real fat % shift
-          const VI_THR = 2;    // lvl — visceral jump
+          // ── FILTER: percentage-based, per-source ──
+          // Each source filtered independently (InBody ≠ Renpho algorithms).
+          // Thresholds are % of reference value — scale-invariant.
+          const W_PCT  = 0.04;  // 4%  of body weight
+          const M_PCT  = 0.04;  // 4%  of muscle mass
+          const F_ABS  = 3.0;   // 3 pp fat % (already a ratio, absolute makes sense here)
+          const VI_THR = 2;     // visceral level jump (ordinal scale)
 
-          const importantInbody = (() => {
+          const filterBySource = (entries) => {
+            // First+last of this source always kept. Middle: cumulative % delta vs last kept.
             const kept = [];
-            allInbody.forEach((r, i, arr) => {
+            entries.forEach((r, i) => {
               const isFirst = i === 0;
-              const isLast  = i === arr.length - 1;
+              const isLast  = i === entries.length - 1;
               const isMilestone = r.w===peakW || r.m===peakM || r.f===minF || r.f===maxF;
-              // Delta vs last KEPT (not adjacent) — catches slow cumulative drift
-              const ref  = kept.length ? kept[kept.length-1] : null;
-              const dW   = ref?.w  != null && r.w  != null ? Math.abs(r.w  - ref.w)  : 0;
-              const dM   = ref?.m  != null && r.m  != null ? Math.abs(r.m  - ref.m)  : 0;
-              const dF   = ref?.f  != null && r.f  != null ? Math.abs(r.f  - ref.f)  : 0;
-              const dVI  = ref?.vi != null && r.vi != null ? Math.abs(r.vi - ref.vi) : 0;
-              const triggered = dW>=W_THR || dM>=M_THR || dF>=F_THR || dVI>=VI_THR;
-              // Build the reason string for this entry
+              const ref = kept.length ? kept[kept.length - 1] : null;
+
+              // Percentage deltas vs last kept entry of SAME SOURCE
+              const pctW  = ref?.w  ? Math.abs(r.w  - ref.w)  / ref.w  : 0;
+              const pctM  = ref?.m  ? Math.abs(r.m  - ref.m)  / ref.m  : 0;
+              const absF  = ref?.f  != null && r.f != null ? Math.abs(r.f  - ref.f)  : 0;
+              const absVI = ref?.vi != null && r.vi != null ? Math.abs(r.vi - ref.vi) : 0;
+              const triggered = pctW>=W_PCT || pctM>=M_PCT || absF>=F_ABS || absVI>=VI_THR;
+
               const reasons = [];
               if (isFirst)     reasons.push("Punto de partida");
               if (isLast && !isFirst) reasons.push("Estado actual");
               if (r.w===peakW) reasons.push(`Peso máximo histórico (${r.w} kg)`);
-              if (r.m===peakM) reasons.push(`Récord de músculo (${r.m} kg)`);
+              if (r.m===peakM) reasons.push(`Récord músculo (${r.m} kg)`);
               if (r.f===minF)  reasons.push(`Mínimo % grasa (${r.f}%)`);
               if (r.f===maxF)  reasons.push(`Peor % grasa (${r.f}%)`);
               if (triggered && ref) {
-                if (dW>=W_THR) reasons.push(`Peso ${(r.w-ref.w)>0?"+":""}${(r.w-ref.w).toFixed(1)} kg vs ${fmtD(ref.d)}`);
-                if (dM>=M_THR) reasons.push(`Músculo ${(r.m-ref.m)>0?"+":""}${(r.m-ref.m).toFixed(1)} kg vs ${fmtD(ref.d)}`);
-                if (dF>=F_THR) reasons.push(`Grasa ${(r.f-ref.f)>0?"+":""}${(r.f-ref.f).toFixed(1)}% vs ${fmtD(ref.d)}`);
-                if (dVI>=VI_THR) reasons.push(`Visceral ${ref.vi}→${r.vi}`);
+                if (pctW>=W_PCT) {
+                  const d=(r.w-ref.w), pct=(d/ref.w*100).toFixed(0);
+                  reasons.push(`Peso ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${pct}%) vs ${fmtD(ref.d)}`);
+                }
+                if (pctM>=M_PCT) {
+                  const d=(r.m-ref.m), pct=(d/ref.m*100).toFixed(0);
+                  reasons.push(`Músculo ${d>0?"+":""}${d.toFixed(1)} kg (${d>0?"+":""}${pct}%) vs ${fmtD(ref.d)}`);
+                }
+                if (absF>=F_ABS) {
+                  const d=(r.f-ref.f);
+                  reasons.push(`Grasa ${d>0?"+":""}${d.toFixed(1)} pp vs ${fmtD(ref.d)}`);
+                }
+                if (absVI>=VI_THR) reasons.push(`Visceral ${ref.vi}→${r.vi}`);
               }
               if (isFirst || isLast || isMilestone || triggered) {
                 kept.push({...r, _reasons: reasons});
               }
             });
             return kept;
-          })();
+          };
+
+          // Split by source, filter independently, merge & re-sort
+          const srcGroups = {};
+          allInbody.forEach(r => {
+            const s = r.source || "inbody";
+            if (!srcGroups[s]) srcGroups[s] = [];
+            srcGroups[s].push(r);
+          });
+          const importantInbody = Object.values(srcGroups)
+            .flatMap(g => filterBySource(g))
+            .sort((a,b) => a.d.localeCompare(b.d));
 
           // ── Build events ──
           const events = [];
