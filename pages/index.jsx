@@ -546,12 +546,69 @@ function OnboardingWizard({ userEmail, defaultEquipment, defaultSupplements, onC
               </div>
             </div>
             <div style={{marginBottom:14}}>
-              <label style={S.lbl}>Condiciones médicas (opcional)</label>
-              <ChipInput label="" icon="" items={data.conditions} color="#ffb830"
-                onChange={v=>upd("conditions",v)}/>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:-8}}>
-                Ej: Hipertensión, Diabetes tipo 2, Dislipidemia, Hipotiroidismo
-              </div>
+              <label style={S.lbl}>Condiciones médicas (opcional — selecciona todas las que apliquen)</label>
+              {(()=>{
+                const PRESET_CONDITIONS = [
+                  {id:"col_alto",  label:"Colesterol alto",     icon:"🩸"},
+                  {id:"sindr_met", label:"Síndrome metabólico", icon:"⚠️"},
+                  {id:"prediab",   label:"Prediabetes",         icon:"🍬"},
+                  {id:"dm2",       label:"Diabetes tipo 2",     icon:"💉"},
+                  {id:"hipert",    label:"Hipertensión",        icon:"❤️"},
+                  {id:"hipot",     label:"Hipotiroidismo",      icon:"🦋"},
+                  {id:"higado",    label:"Hígado graso",        icon:"🫀"},
+                  {id:"resistins", label:"Resistencia a insulina", icon:"⚡"},
+                  {id:"sop",       label:"SOP",                 icon:"🔄"},
+                  {id:"apnea",     label:"Apnea del sueño",     icon:"😴"},
+                  {id:"artritis",  label:"Artritis / inflamación crónica", icon:"🦴"},
+                  {id:"hiper_ac",  label:"Hiperuricemia / gota",icon:"🧪"},
+                ];
+                const toggle = (label) => {
+                  const curr = data.conditions;
+                  const next = curr.includes(label)
+                    ? curr.filter(x=>x!==label)
+                    : [...curr, label];
+                  upd("conditions", next);
+                };
+                return (
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:6,marginBottom:10}}>
+                      {PRESET_CONDITIONS.map(c=>{
+                        const active = data.conditions.includes(c.label);
+                        return (
+                          <button key={c.id} onClick={()=>toggle(c.label)} style={{
+                            display:"flex",alignItems:"center",gap:7,
+                            padding:"8px 10px",borderRadius:3,cursor:"pointer",textAlign:"left",
+                            border:`1px solid ${active?"#ffb830":"#2a2a38"}`,
+                            background:active?"rgba(255,184,48,.08)":"#0c0c0f",
+                            color:active?"#ffb830":"#8888a8",
+                            fontFamily:"'Instrument Sans',sans-serif",fontSize:12,
+                            transition:"all .12s",
+                          }}>
+                            <span style={{fontSize:14,flexShrink:0}}>{c.icon}</span>
+                            <span>{c.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* "Otra" free-text chip input */}
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <ChipInput label="" icon="" items={data.conditions.filter(x=>!PRESET_CONDITIONS.map(p=>p.label).includes(x))}
+                        color="#ffb830" onChange={v=>{
+                          const presetSelected = data.conditions.filter(x=>PRESET_CONDITIONS.map(p=>p.label).includes(x));
+                          upd("conditions",[...presetSelected,...v]);
+                        }}/>
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:4}}>
+                      ↑ Escribe condiciones adicionales arriba y presiona Enter
+                    </div>
+                    {data.conditions.length>0 && (
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ffb830",marginTop:6}}>
+                        ✓ {data.conditions.length} condición{data.conditions.length>1?"es":""} seleccionada{data.conditions.length>1?"s":""}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label style={S.lbl}>Medicamentos actuales (opcional)</label>
@@ -3429,7 +3486,51 @@ Analiza este día y responde SOLO JSON sin backticks:
         )}
 
         {/* ══ ENTRENA ══ */}
-        {tab==="entrena" && (
+        {tab==="entrena" && (()=>{
+          const [activeDay, setActiveDay] = React.useState(0);
+          const printRoutine = () => {
+            if (!generatedRoutine || generatedRoutine.error) return;
+            const days = generatedRoutine.days || [];
+            const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${generatedRoutine.title}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:20px;color:#111;font-size:13px}
+  h1{font-size:20px;margin-bottom:4px}
+  .sub{color:#666;font-size:11px;margin-bottom:18px}
+  .day{margin-bottom:20px;page-break-inside:avoid}
+  .day-header{background:#111;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;border-radius:3px 3px 0 0}
+  .day-title{font-weight:700;font-size:14px}
+  .day-type{font-size:10px;letter-spacing:.1em;color:#a8ff3e}
+  table{width:100%;border-collapse:collapse;border:1px solid #ddd}
+  th{background:#f5f5f5;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#555;border-bottom:1px solid #ddd}
+  td{padding:7px 10px;border-bottom:1px solid #eee;vertical-align:top}
+  .sets{font-family:monospace;font-weight:700;color:#333;white-space:nowrap}
+  .notes{font-size:11px;color:#27ae60;margin-top:2px}
+  .rest-day{background:#f9f9f9;padding:14px;text-align:center;color:#888;border:1px solid #ddd;border-radius:0 0 3px 3px}
+  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#888}
+  @media print{body{margin:10px}.day{page-break-inside:avoid}}
+</style></head><body>
+<h1>${generatedRoutine.title}</h1>
+<div class="sub">${generatedRoutine.description||""} · Generado ${new Date().toLocaleDateString('es')}</div>
+${days.map(d=>{
+  const isRest = d.type?.includes("DESCANSO")||d.type?.includes("REST")||!d.exercises?.length;
+  return `<div class="day">
+    <div class="day-header"><span class="day-title">${d.day}</span><span class="day-type">${d.type||""}</span></div>
+    ${isRest
+      ? `<div class="rest-day">🛌 Día de descanso activo — caminar, movilidad, stretching</div>`
+      : `<table><thead><tr><th>#</th><th>Ejercicio</th><th>Series / Reps</th></tr></thead><tbody>
+      ${(d.exercises||[]).map((ex,j)=>`<tr><td style="color:#888;font-size:11px">${j+1}</td><td><div style="font-weight:600">${ex.name}</div>${ex.notes?`<div class="notes">💡 ${ex.notes}</div>`:""}</td><td class="sets">${ex.sets}</td></tr>`).join("")}
+      </tbody></table>`}
+  </div>`;
+}).join("")}
+${generatedRoutine.notes?`<div class="footer"><strong>📝 Notas:</strong> ${generatedRoutine.notes}</div>`:""}
+</body></html>`;
+            const w = window.open("","_blank","width=800,height=600");
+            w.document.write(html);
+            w.document.close();
+            setTimeout(()=>w.print(),400);
+          };
+
+          return (
           <div>
             {/* AI Routine Generator */}
             <div className="sec-h">Generador de Rutina con IA</div>
@@ -3440,45 +3541,142 @@ Analiza este día y responde SOLO JSON sin backticks:
               </p>
               <textarea value={routineInput} onChange={e=>setRoutineInput(e.target.value)}
                 placeholder="Ej: Quiero una rutina de 4 días enfocada en mejorar las piernas y reducir grasa visceral. Tengo 45 min por sesión. Incluye más trabajo de cardio en intervalos."
-                rows={4} className="inp" style={{resize:"vertical",marginBottom:10}}/>
-              <div style={{display:"flex",gap:8,marginBottom:generatedRoutine?14:0}}>
+                rows={3} className="inp" style={{resize:"vertical",marginBottom:10}}/>
+              <div style={{display:"flex",gap:8,marginBottom:generatedRoutine?14:0,flexWrap:"wrap"}}>
                 <button className="btn" style={{flex:1}} onClick={generateRoutine} disabled={routineLoading||!routineInput.trim()}>
                   {routineLoading?<span>GENERANDO <span className="dots"><span/><span/><span/></span></span>:"⚡ GENERAR RUTINA CON IA"}
                 </button>
+                {generatedRoutine && !generatedRoutine.error && (
+                  <button onClick={printRoutine} style={{
+                    fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".1em",
+                    padding:"0 14px",border:"1px solid #2a2a38",borderRadius:3,
+                    background:"transparent",color:"#8888a8",cursor:"pointer",flexShrink:0
+                  }}>🖨 IMPRIMIR</button>
+                )}
                 {routineTs && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",alignSelf:"center",whiteSpace:"nowrap"}}>{fmtCacheAge(routineTs)}</span>}
               </div>
               {generatedRoutine?.error && <div style={{fontFamily:"'JetBrains Mono',monospace",color:"#ff4d4d",fontSize:11}}>{generatedRoutine.error}</div>}
-              {generatedRoutine && !generatedRoutine.error && (
-                <div className="fade-in">
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,marginBottom:4}}>{generatedRoutine.title}</div>
-                    {generatedRoutine.description && <p style={{fontSize:12,color:"#8888a8",lineHeight:1.5}}>{generatedRoutine.description}</p>}
-                  </div>
-                  {generatedRoutine.days?.map((day,i)=>(
-                    <div key={i} className="card" style={{marginBottom:10,borderTop:`2px solid ${day.type?.includes("DESCANSO")||day.type?.includes("REST")?"#2a2a38":"#a8ff3e"}`,opacity:day.type?.includes("DESCANSO")||day.type?.includes("REST")?0.5:1}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18}}>{day.day}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".15em",textTransform:"uppercase"}}>{day.type}</div>
-                      </div>
-                      {day.exercises?.map((ex,j)=>(
-                        <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"6px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontFamily:"'Instrument Sans',sans-serif",fontWeight:500}}>{ex.name}</div>
-                            {ex.notes && <div style={{fontSize:11,color:"#3ddc84",marginTop:2}}>💡 {ex.notes}</div>}
+
+              {/* ── COMPACT DAY-TABS VIEW ── */}
+              {generatedRoutine && !generatedRoutine.error && (()=>{
+                const days = generatedRoutine.days || [];
+                const activeDayData = days[activeDay];
+                const isRest = activeDayData?.type?.includes("DESCANSO")||activeDayData?.type?.includes("REST")||!activeDayData?.exercises?.length;
+                const dayColors = ["#a8ff3e","#4dc8ff","#ffb830","#ff9940","#c084fc","#ff7a4d","#3ddc84"];
+                return (
+                  <div className="fade-in">
+                    {/* Title + description */}
+                    <div style={{marginBottom:14}}>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,marginBottom:3}}>{generatedRoutine.title}</div>
+                      {generatedRoutine.description && <p style={{fontSize:11,color:"#8888a8",lineHeight:1.5,margin:0}}>{generatedRoutine.description}</p>}
+                    </div>
+
+                    {/* Day tabs row */}
+                    <div style={{display:"flex",gap:4,marginBottom:14,overflowX:"auto",paddingBottom:4,WebkitOverflowScrolling:"touch"}}>
+                      {days.map((d,i)=>{
+                        const isRestDay = d.type?.includes("DESCANSO")||d.type?.includes("REST")||!d.exercises?.length;
+                        const col = isRestDay?"#2a2a38":dayColors[i%dayColors.length];
+                        const active = activeDay===i;
+                        return (
+                          <button key={i} onClick={()=>setActiveDay(i)} style={{
+                            flexShrink:0,padding:"6px 10px",border:`1px solid ${active?col:"#2a2a38"}`,
+                            borderRadius:3,cursor:"pointer",
+                            background:active?col+"18":"transparent",
+                            fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".06em",
+                            color:active?col:"#44445a",transition:"all .12s",
+                            borderBottom:active?`2px solid ${col}`:"1px solid #2a2a38",
+                          }}>
+                            <div style={{fontWeight:active?700:400}}>{d.day?.split(" ")[0]||`DÍA ${i+1}`}</div>
+                            <div style={{fontSize:"7px",marginTop:1,opacity:.7,maxWidth:70,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                              {isRestDay?"DESCANSO":(d.type||"ENTRENO").slice(0,12)}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active day content */}
+                    {activeDayData && (
+                      <div style={{background:"#0f0f16",border:"1px solid #2a2a38",borderRadius:4,overflow:"hidden"}}>
+                        {/* Day header bar */}
+                        <div style={{
+                          background:isRest?"#1a1a22":`${dayColors[activeDay%dayColors.length]}12`,
+                          borderBottom:"1px solid #2a2a38",
+                          padding:"10px 14px",
+                          display:"flex",justifyContent:"space-between",alignItems:"center"
+                        }}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:"#e8e8f0"}}>{activeDayData.day}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",letterSpacing:".12em",
+                            color:isRest?"#44445a":dayColors[activeDay%dayColors.length],textTransform:"uppercase"}}>
+                            {activeDayData.type}
                           </div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#a8ff3e",flexShrink:0,marginLeft:10}}>{ex.sets}</div>
                         </div>
-                      ))}
+
+                        {/* Exercises table or rest */}
+                        {isRest ? (
+                          <div style={{padding:"24px",textAlign:"center"}}>
+                            <div style={{fontSize:28,marginBottom:8}}>🛌</div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
+                              DESCANSO ACTIVO — Caminar 20-30 min · Movilidad · Stretching
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            {/* Column headers */}
+                            <div style={{display:"grid",gridTemplateColumns:"28px 1fr auto",gap:0,
+                              padding:"6px 14px",borderBottom:"1px solid #1a1a22",
+                              fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#333348",letterSpacing:".12em"}}>
+                              <span>#</span><span>EJERCICIO</span><span>SERIES / REPS</span>
+                            </div>
+                            {activeDayData.exercises?.map((ex,j)=>(
+                              <div key={j} style={{
+                                display:"grid",gridTemplateColumns:"28px 1fr auto",gap:0,
+                                padding:"10px 14px",
+                                borderBottom:"1px solid #1a1a220",
+                                background:j%2===0?"transparent":"rgba(255,255,255,.015)",
+                              }}>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#333348",paddingTop:2}}>{j+1}</span>
+                                <div style={{paddingRight:12}}>
+                                  <div style={{fontFamily:"'Instrument Sans',sans-serif",fontWeight:600,fontSize:13,color:"#e8e8f0"}}>{ex.name}</div>
+                                  {ex.notes && <div style={{fontSize:11,color:"#3ddc84",marginTop:2}}>💡 {ex.notes}</div>}
+                                </div>
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"11px",fontWeight:700,
+                                  color:dayColors[activeDay%dayColors.length],whiteSpace:"nowrap",paddingTop:2}}>{ex.sets}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Nav arrows */}
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:10,gap:8}}>
+                      <button onClick={()=>setActiveDay(d=>Math.max(0,d-1))} disabled={activeDay===0}
+                        style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:"6px 14px",
+                          border:"1px solid #2a2a38",borderRadius:3,background:"transparent",
+                          color:activeDay===0?"#2a2a38":"#8888a8",cursor:activeDay===0?"default":"pointer"}}>
+                        ← ANTERIOR
+                      </button>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",alignSelf:"center"}}>
+                        {activeDay+1} / {days.length}
+                      </span>
+                      <button onClick={()=>setActiveDay(d=>Math.min(days.length-1,d+1))} disabled={activeDay===days.length-1}
+                        style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",padding:"6px 14px",
+                          border:"1px solid #2a2a38",borderRadius:3,background:"transparent",
+                          color:activeDay===days.length-1?"#2a2a38":"#8888a8",cursor:activeDay===days.length-1?"default":"pointer"}}>
+                        SIGUIENTE →
+                      </button>
                     </div>
-                  ))}
-                  {generatedRoutine.notes && (
-                    <div className="ins ib">
-                      <strong>📝 Notas importantes</strong>
-                      {generatedRoutine.notes}
-                    </div>
-                  )}
-                </div>
-              )}
+
+                    {generatedRoutine.notes && (
+                      <div className="ins ib" style={{marginTop:12}}>
+                        <strong>📝 Notas importantes</strong>
+                        {generatedRoutine.notes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ── Rutinas Guardadas ── */}
@@ -3536,7 +3734,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             </div>
           </div>
-        )}
+        )})()}
 
         {/* ══ GUÍA ══ */}
         {tab==="guia" && (()=>{
@@ -3604,7 +3802,58 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* ── Plan de Referencia — solo si hay datos AI o log ── */}
             {Object.keys(log).length > 0 && (<>
-            <div className="sec-h">Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:4}}>
+              <div className="sec-h" style={{marginBottom:0}}>Plan de Referencia — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
+              <button onClick={()=>{
+                const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Plan Alimenticio</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:24px;color:#111;font-size:13px}
+  h1{font-size:20px;margin-bottom:4px}
+  .sub{color:#666;font-size:11px;margin-bottom:20px}
+  .meal{margin-bottom:18px;page-break-inside:avoid;border:1px solid #ddd;border-radius:4px;overflow:hidden}
+  .meal-header{background:#111;color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center}
+  .meal-title{font-weight:700;font-size:15px}
+  .meal-time{font-size:10px;color:#aaa}
+  .meal-macros{font-size:10px;color:#ffb830}
+  table{width:100%;border-collapse:collapse}
+  th{background:#f7f7f7;padding:6px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#555;border-bottom:1px solid #ddd}
+  td{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:top;font-size:12px}
+  .why{color:#27ae60;font-style:italic}
+  .totals{margin-top:16px;background:#f5f5f5;border-radius:4px;padding:12px 14px;display:flex;gap:20px;font-size:12px}
+  .totals strong{color:#333;font-size:14px}
+  .footer{margin-top:20px;font-size:10px;color:#888;border-top:1px solid #eee;padding-top:10px}
+  @media print{body{margin:10px}.meal{page-break-inside:avoid}}
+</style></head><body>
+<h1>Plan Alimenticio — ${isTrainingDay?"Día de Entreno":"Día de Descanso"}</h1>
+<div class="sub">Meta: ${targets.calories} kcal · Prot ${targets.protein}g · Carbs ${targets.carbs}g · Grasas ${targets.fats}g · Generado ${new Date().toLocaleDateString("es")}</div>
+${PLAN_MEALS.map(m=>`
+<div class="meal">
+  <div class="meal-header">
+    <div><span class="meal-title">${m.name}</span> <span class="meal-time">${m.time}</span></div>
+    <span class="meal-macros">${m.kcal} kcal · P:${m.p}g · C:${m.c}g · G:${m.f}g</span>
+  </div>
+  <table><thead><tr><th>Alimento</th><th>Beneficio</th></tr></thead><tbody>
+  ${m.items.map(it=>`<tr><td><strong>${it.n}</strong></td><td class="why">${it.why}</td></tr>`).join("")}
+  </tbody></table>
+</div>`).join("")}
+<div class="totals">
+  <div>Total aprox: <strong>${PLAN_MEALS.reduce((s,m)=>s+m.kcal,0)} kcal</strong></div>
+  <div>Proteína: <strong>${PLAN_MEALS.reduce((s,m)=>s+m.p,0)}g</strong></div>
+  <div>Carbos: <strong>${PLAN_MEALS.reduce((s,m)=>s+m.c,0)}g</strong></div>
+  <div>Grasas: <strong>${PLAN_MEALS.reduce((s,m)=>s+m.f,0)}g</strong></div>
+</div>
+<div class="footer">Metabolic Health OS · Plan de referencia personalizado</div>
+</body></html>`;
+                const w = window.open("","_blank","width=800,height=700");
+                w.document.write(html);
+                w.document.close();
+                setTimeout(()=>w.print(),400);
+              }} style={{
+                fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",letterSpacing:".1em",
+                padding:"5px 14px",border:"1px solid #2a2a38",borderRadius:3,
+                background:"transparent",color:"#8888a8",cursor:"pointer",flexShrink:0
+              }}>🖨 IMPRIMIR PLAN</button>
+            </div>
             <p style={{fontSize:12,color:"#44445a",marginBottom:14,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".06em"}}>
               PLANTILLA BASE · USA LA IA EN HÁBITOS PARA UN PLAN PERSONALIZADO
             </p>
