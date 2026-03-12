@@ -1241,7 +1241,7 @@ function AppInner() {
       d: inbodyResult.date || new Date().toISOString().slice(0,7).replace("-","'"),
       w: inbodyResult.weight, m: inbodyResult.muscle, f: inbodyResult.fat_pct,
       s: inbodyResult.inbody_score, vi: inbodyResult.visceral,
-      whr: inbodyResult.whr, note: inbodyResult.notes || "Nuevo ◀",
+      whr: inbodyResult.whr, note: inbodyResult.notes || "Nuevo ◀", source: "inbody",
     };
     saveCustomInbody([...customInbody, entry], entry);
     setInbodyResult(null); setInbodyB64(null);
@@ -1254,7 +1254,7 @@ function AppInner() {
     const wNum = parseFloat(weight), mNum = parseFloat(muscle)||null, fNum = parseFloat(fat_pct)||null;
     const viNum = parseFloat(visceral)||null, cNum = parseFloat(waist)||null, sNum = parseFloat(inbody_score)||null;
     const whrCalc = (cNum && wNum) ? parseFloat((cNum / 170).toFixed(2)) : null; // approx height
-    const entry = { d:date, w:wNum, m:mNum, f:fNum, vi:viNum, s:sNum, whr:whrCalc, waist:cNum, note:note||"Manual ◀" };
+    const entry = { d:date, w:wNum, m:mNum, f:fNum, vi:viNum, s:sNum, whr:whrCalc, waist:cNum, note:note||"Manual ◀", source:"manual" };
     saveCustomInbody([...customInbody, entry], entry);
     setManualInbody({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
     setShowManualInbody(false);
@@ -1472,7 +1472,13 @@ Analiza este día y responde SOLO JSON sin backticks:
     if(!m) return 0;
     return (2000+parseInt(m[2]))*100+(months[m[1]]??0);
   };
-  const allInbody = [...bodyMeasurements, ...customInbody].sort((a,b)=>parseInbodyDate(a.d)-parseInbodyDate(b.d));
+  // Merge DB + custom, deduplicate by date (DB wins), sort chronologically
+  const allInbodyRaw = [...bodyMeasurements, ...customInbody];
+  const inbodyByDate = new Map();
+  allInbodyRaw.forEach(x => {
+    if (!inbodyByDate.has(x.d) || x.isSeed) inbodyByDate.set(x.d, x);
+  });
+  const allInbody = [...inbodyByDate.values()].sort((a,b)=>parseInbodyDate(a.d)-parseInbodyDate(b.d));
   const lastInbody = allInbody[allInbody.length-1] || null;
 
   // ─── SMART NOTIFICATIONS (all deps available here) ───
@@ -1583,7 +1589,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       const bone = num(iBone);
       const bmi = num(iBMI);
 
-      rows.push({ d, w, m, f, vi, bmr, metAge, water, bone, bmi, note:"Renpho ◀" });
+      rows.push({ d, w, m, f, vi, bmr, metAge, water, bone, bmi, note:"Renpho ◀", source:"renpho" });
     }
     return rows.sort((a,b)=>a.d.localeCompare(b.d));
   };
@@ -1701,7 +1707,8 @@ Analiza este día y responde SOLO JSON sin backticks:
       if(resolved.log) { saveLog(resolved.log); restored.push("log de comidas"); }
       if(resolved.favs) { saveFavs(resolved.favs); restored.push("favoritos"); }
       if(resolved.targets) { saveTargets(resolved.targets); restored.push("objetivos"); }
-      if(resolved.customInbody) { saveCustomInbody(resolved.customInbody); restored.push("InBody"); }
+      // Only restore customInbody from backup if DB has no measurements (avoids triplication)
+      if(resolved.customInbody && bodyMeasurements.length === 0) { saveCustomInbody(resolved.customInbody); restored.push("InBody"); }
       if(resolved.customLabs) { saveCustomLabs(resolved.customLabs); restored.push("labs"); }
 
       if(restored.length === 0) {
@@ -2769,23 +2776,42 @@ Analiza este día y responde SOLO JSON sin backticks:
               </ResponsiveContainer>
             </div>
 
-            <div className="sec-h">Historial Completo InBody</div>
+            <div className="sec-h">Historial de Mediciones</div>
+            {/* Source legend */}
+            <div style={{display:"flex",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+              {[["📊","InBody","#4dc8ff","inbody"],["⚖️","Renpho","#a8ff3e","renpho"],["✏️","Manual","#8888a8","manual"]].map(([ic,lb,col,src])=>(
+                allInbody.some(r=>(r.source||"inbody")===src) &&
+                <div key={src} style={{display:"flex",alignItems:"center",gap:5,fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:col}}>
+                  <span>{ic}</span><span>{lb}</span>
+                </div>
+              ))}
+              <div style={{marginLeft:"auto",fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
+                ⚠ Renpho y InBody usan algoritmos distintos — valores no directamente comparables
+              </div>
+            </div>
             <div className="card" style={{overflowX:"auto",marginBottom:20}}>
               <table className="tbl">
-                <thead><tr><th>Fecha</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th>WHR</th><th>Score</th><th>Nota</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Fuente</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th>WHR</th><th>Score</th><th>Nota</th></tr></thead>
                 <tbody>
-                  {[...allInbody].reverse().map(r=>(
-                    <tr key={r.d+r.w} style={{background:r.note?.includes("HOY")||r.note?.includes("Nuevo")?"rgba(168,255,62,.04)":""}}>
-                      <td className="mono" style={{color:r.note?.includes("HOY")||r.note?.includes("Nuevo")?"#a8ff3e":"#8888a8",fontWeight:r.note?.includes("HOY")||r.note?.includes("Nuevo")?700:400}}>{r.d}</td>
+                  {[...allInbody].reverse().map(r=>{
+                    const src = r.source||"inbody";
+                    const srcCfg = {inbody:{ic:"📊",col:"#4dc8ff"},renpho:{ic:"⚖️",col:"#a8ff3e"},manual:{ic:"✏️",col:"#8888a8"}};
+                    const {ic,col} = srcCfg[src]||srcCfg.inbody;
+                    const isNew = r.note?.includes("HOY")||r.note?.includes("Nuevo")||r.note?.includes("◀");
+                    return (
+                    <tr key={r.d+(r.source||"")+(r.w||"")} style={{background:isNew&&src==="inbody"?"rgba(77,200,255,.04)":isNew&&src==="renpho"?"rgba(168,255,62,.04)":""}}>
+                      <td className="mono" style={{color:isNew?"#e8e8f0":"#8888a8",fontWeight:isNew?600:400}}>{r.d}</td>
+                      <td><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:col,background:col+"18",borderRadius:2,padding:"1px 5px"}}>{ic} {src.toUpperCase()}</span></td>
                       <td className="mono">{r.w} kg</td>
-                      <td className="mono" style={{color:"#4dc8ff"}}>{r.m ?? "—"} kg</td>
-                      <td className="mono" style={{color:r.f<=14.5?"#3ddc84":r.f<=17?"#a8ff3e":r.f<=19?"#ffb830":"#ff4d4d"}}>{r.f}%</td>
-                      <td className="mono" style={{color:r.vi<=5?"#3ddc84":"#ffb830"}}>{r.vi}</td>
-                      <td className="mono" style={{color:r.whr<=0.90?"#3ddc84":"#ffb830"}}>{r.whr}</td>
-                      <td className="mono" style={{color:r.s>=85?"#3ddc84":r.s>=80?"#4dc8ff":"#44445a"}}>{r.s ?? "—"}</td>
+                      <td className="mono" style={{color:"#4dc8ff"}}>{r.m ?? "—"}{r.m?" kg":""}</td>
+                      <td className="mono" style={{color:!r.f?"#44445a":r.f<=14.5?"#3ddc84":r.f<=17?"#a8ff3e":r.f<=19?"#ffb830":"#ff4d4d"}}>{r.f!=null?r.f+"%":"—"}</td>
+                      <td className="mono" style={{color:!r.vi?"#44445a":r.vi<=5?"#3ddc84":"#ffb830"}}>{r.vi??"—"}</td>
+                      <td className="mono" style={{color:!r.whr?"#44445a":r.whr<=0.90?"#3ddc84":"#ffb830"}}>{r.whr??"—"}</td>
+                      <td className="mono" style={{color:!r.s?"#44445a":r.s>=85?"#3ddc84":r.s>=80?"#4dc8ff":"#44445a"}}>{r.s??"—"}</td>
                       <td style={{fontSize:10,color:"#8888a8"}}>{r.note}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
