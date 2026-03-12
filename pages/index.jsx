@@ -928,6 +928,10 @@ function AppInner() {
 
   const imgRef        = useRef();
   const backupRef     = useRef();
+  const renphoRef     = useRef();
+  const [showRenphoModal, setShowRenphoModal] = useState(false);
+  const [renphoPreview, setRenphoPreview]     = useState(null);
+  const [renphoLoading, setRenphoLoading]     = useState(false);
   const inbodyImgRef  = useRef();
   const labsImgRef    = useRef();
   const bodyPhotoRef  = useRef();
@@ -1519,6 +1523,84 @@ Analiza este día y responde SOLO JSON sin backticks:
     return notifs.filter(n=>!dismissedNotifs.includes(n.id));
   })() : [];
   const notifColors = {warn:"#ffb830",alert:"#ff4d4d",info:"#4dc8ff",success:"#3ddc84"};
+
+  // ── Renpho CSV parser ──────────────────────────────────────────
+  const parseRenphoCSV = (text) => {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    // Renpho column headers (case-insensitive, trim)
+    const headers = lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/[()]/g,"").replace(/\s+/g,"_"));
+    const rows = [];
+    for (let i=1; i<lines.length; i++) {
+      const cols = lines[i].split(",").map(s=>s.trim().replace(/"/g,""));
+      if (cols.length < 3 || !cols[0]) continue;
+      const get = (...keys) => {
+        for (const k of keys) {
+          const idx = headers.findIndex(h=>h.includes(k));
+          if (idx>=0 && cols[idx] && cols[idx]!=="") return parseFloat(cols[idx])||null;
+        }
+        return null;
+      };
+      // Parse date — Renpho format: "2024-01-15 08:30:00" or "2024/01/15"
+      const rawDate = cols[0] || cols[headers.findIndex(h=>h.includes("time")||h.includes("date"))];
+      if (!rawDate) continue;
+      const dateMatch = rawDate.match(/(\d{4})[/-](\d{2})[/-](\d{2})/);
+      if (!dateMatch) continue;
+      const d = `${dateMatch[1]}-${dateMatch[2]}'${dateMatch[3]}`;
+      const w = get("weight");
+      if (!w) continue; // weight required
+      const m = get("muscle_mass","skeletal_muscle","muscle");
+      const f = get("body_fat_rate","body_fat","fat_rate","fat");
+      const vi = get("visceral_fat","visceral");
+      const water = get("body_water","water");
+      const bone = get("bone_mass","bone");
+      const bmr = get("bmr","basal_metabolic");
+      const metAge = get("metabolic_age");
+      rows.push({ d, w, m, f, vi, water, bone, bmr, metAge, note:"Renpho ◀" });
+    }
+    return rows.sort((a,b)=>a.d.localeCompare(b.d));
+  };
+
+  const handleRenphoFile = (file) => {
+    if (!file) return;
+    setRenphoLoading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const rows = parseRenphoCSV(ev.target.result);
+        if (rows.length===0) { alert("No se encontraron datos válidos. Verifica que sea el CSV de Renpho."); setRenphoLoading(false); return; }
+        setRenphoPreview(rows);
+        setShowRenphoModal(true);
+      } catch(e) { alert("Error leyendo CSV: "+e.message); }
+      setRenphoLoading(false);
+    };
+    reader.readAsText(file);
+    renphoRef.current.value="";
+  };
+
+  const confirmRenphoImport = async () => {
+    if (!renphoPreview || renphoPreview.length===0) return;
+    // Merge: avoid duplicate dates
+    const existingDates = new Set(allInbody.map(x=>x.d));
+    const newRows = renphoPreview.filter(r=>!existingDates.has(r.d));
+    if (newRows.length===0) { alert("Todas las fechas ya existen en tu historial."); return; }
+    const merged = [...customInbody, ...newRows].sort((a,b)=>a.d.localeCompare(b.d));
+    // Save each new row to Supabase
+    if (user) {
+      for (const row of newRows) {
+        insertBodyMeasurement(user.id, row).catch(console.error);
+      }
+      // Also refresh from DB
+      setTimeout(async()=>{
+        const fresh = await getBodyMeasurements(user.id).catch(()=>[]);
+        setBodyMeasurements(fresh);
+      }, 1500);
+    }
+    saveCustomInbody(merged, null);
+    setShowRenphoModal(false);
+    setRenphoPreview(null);
+    alert(`✓ ${newRows.length} medición(es) Renpho importadas. ${renphoPreview.length-newRows.length} duplicadas omitidas.`);
+  };
 
   const exportData = () => {
     const json = JSON.stringify({log,favs,targets,customInbody,customLabs,bodyPhotosMeta:bodyPhotos.map(p=>({id:p.id,date:p.date,note:p.note}))},null,2);
@@ -2683,6 +2765,139 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* Upload new InBody */}
 
+            {/* ══ HEALTH TRAJECTORY ══ */}
+            {(()=>{
+              if (allInbody.length < 2 && labResults.length < 2) return (
+                <div>
+                  <div className="sec-h">Trayectoria de Salud</div>
+                  <div className="card" style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em"}}>SE NECESITAN AL MENOS 2 MEDICIONES</div>
+                    <div style={{fontSize:11,marginTop:6}}>Agrega más datos de InBody o Labs para calcular tu trayectoria.</div>
+                  </div>
+                </div>
+              );
+
+              // ── Slope calculator: linear regression on last N points ──
+              const slope = (vals) => {
+                const pts = vals.filter(v=>v!=null&&!isNaN(v));
+                if (pts.length<2) return null;
+                const n=pts.length, sx=pts.reduce((s,_,i)=>s+i,0), sy=pts.reduce((s,v)=>s+v,0);
+                const sxy=pts.reduce((s,v,i)=>s+i*v,0), sx2=pts.reduce((s,_,i)=>s+i*i,0);
+                return (n*sxy-sx*sy)/(n*sx2-sx*sx);
+              };
+
+              const dir = (s, higherIsBetter=false) => {
+                if (s===null) return {icon:"—",label:"Sin datos",color:"#44445a"};
+                const abs = Math.abs(s);
+                if (abs < 0.05) return {icon:"→",label:"Estable",color:"#8888a8"};
+                const improving = higherIsBetter ? s>0 : s<0;
+                return improving
+                  ? {icon:"⬆",label:"Mejorando",color:"#3ddc84"}
+                  : {icon:"⬇",label:"Deteriorando",color:"#ff4d4d"};
+              };
+
+              // Body composition trends (from allInbody)
+              const ibW   = allInbody.map(x=>x.w);
+              const ibM   = allInbody.map(x=>x.m);
+              const ibF   = allInbody.map(x=>x.f);
+              const ibVi  = allInbody.map(x=>x.vi);
+              const lastIB = allInbody[allInbody.length-1];
+
+              // Lab trends
+              const labsSorted = [...labResults].sort((a,b)=>a.date.localeCompare(b.date));
+              const lbLDL  = labsSorted.map(x=>x.ldl);
+              const lbHDL  = labsSorted.map(x=>x.hdl);
+              const lbTG   = labsSorted.map(x=>x.tg);
+              const lbHBA  = labsSorted.map(x=>x.hba1c);
+              const lbGlu  = labsSorted.map(x=>x.glucose);
+
+              // TG/HDL ratio trend
+              const tgHdlSeries = labsSorted.map(x=>(x.tg&&x.hdl)?parseFloat((x.tg/x.hdl).toFixed(2)):null);
+
+              const trajectories = [
+                {label:"Peso corporal", unit:"kg", cur:lastIB?.w, slope:slope(ibW), higher:false, icon:"⚖️"},
+                {label:"Masa muscular", unit:"kg", cur:lastIB?.m, slope:slope(ibM), higher:true, icon:"💪"},
+                {label:"% Grasa",       unit:"%",  cur:lastIB?.f, slope:slope(ibF), higher:false, icon:"🔥"},
+                {label:"Grasa visceral",unit:"lvl",cur:lastIB?.vi,slope:slope(ibVi),higher:false, icon:"🫀"},
+                {label:"LDL",          unit:"mg/dL",cur:labsSorted[labsSorted.length-1]?.ldl, slope:slope(lbLDL), higher:false, icon:"🩸"},
+                {label:"HDL",          unit:"mg/dL",cur:labsSorted[labsSorted.length-1]?.hdl, slope:slope(lbHDL), higher:true,  icon:"🛡"},
+                {label:"HbA1c",        unit:"%",    cur:labsSorted[labsSorted.length-1]?.hba1c,slope:slope(lbHBA),higher:false, icon:"🍬"},
+                {label:"TG/HDL ratio", unit:"",     cur:tgHdlSeries.filter(v=>v).slice(-1)[0], slope:slope(tgHdlSeries.filter(v=>v)), higher:false, icon:"📉"},
+              ].filter(t=>t.cur!=null && t.slope!==null);
+
+              if (trajectories.length===0) return null;
+
+              // Overall trajectory score: count improving
+              const improving = trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬆").length;
+              const deteriorating = trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬇").length;
+              const overallColor = improving>deteriorating?"#3ddc84":deteriorating>improving?"#ff4d4d":"#ffb830";
+              const overallLabel = improving>deteriorating?"↗ MEJORANDO":deteriorating>improving?"↘ DETERIORANDO":"→ ESTABLE";
+
+              // 6-month projection: current + slope * 6
+              const project = (cur, s) => cur && s!==null ? parseFloat((cur + s*6).toFixed(1)) : null;
+
+              return (
+                <div>
+                  <div className="sec-h">Trayectoria de Salud</div>
+                  {/* Overall banner */}
+                  <div className="card" style={{marginBottom:14,borderLeft:`3px solid ${overallColor}`,borderRadius:"0 4px 4px 0",background:`rgba(${overallColor==="#3ddc84"?"61,220,132":overallColor==="#ff4d4d"?"255,77,77":"255,184,48"},.04)`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                      <div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:overallColor,letterSpacing:".15em",marginBottom:4}}>DIRECCIÓN GENERAL</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:20,color:overallColor}}>{overallLabel}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>
+                          {improving} indicadores mejorando · {trajectories.length-improving-deteriorating} estables · {deteriorating} deteriorando
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#3ddc84",lineHeight:1}}>{improving}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>MEJOR</div>
+                        </div>
+                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#ff4d4d",lineHeight:1}}>{deteriorating}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>PEOR</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Per-indicator grid */}
+                  <div className="card" style={{marginBottom:14}}>
+                    <div className="lbl" style={{marginBottom:12}}>Indicadores individuales — pendiente + proyección 6 meses</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
+                      {trajectories.map(t=>{
+                        const {icon:dIcon,label:dLabel,color:dColor} = dir(t.slope, t.higher);
+                        const proj = project(t.cur, t.slope);
+                        const projDelta = proj ? parseFloat((proj-t.cur).toFixed(1)) : null;
+                        return (
+                          <div key={t.label} style={{background:"#131318",borderRadius:4,padding:"10px 12px",borderLeft:`2px solid ${dColor}`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                              <div>
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em"}}>{t.icon} {t.label.toUpperCase()}</div>
+                                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#e8e8f0",lineHeight:1.2,marginTop:2}}>
+                                  {t.cur}<span style={{fontSize:10,color:"#44445a"}}> {t.unit}</span>
+                                </div>
+                              </div>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:dColor}}>{dIcon}</div>
+                            </div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:dColor,marginBottom:4}}>{dLabel}</div>
+                            {proj && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
+                              6 meses: <span style={{color:dColor}}>{proj} {t.unit}</span>
+                              {projDelta!==null && <span style={{marginLeft:4}}>({projDelta>0?"+":""}{projDelta})</span>}
+                            </div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Insight note */}
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:20,lineHeight:1.7,letterSpacing:".04em"}}>
+                    ⚠ Proyecciones calculadas con regresión lineal sobre datos históricos. Asumen adherencia constante al protocolo actual.
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
         )}
 
@@ -3656,6 +3871,22 @@ Analiza este día y responde SOLO JSON sin backticks:
                   ))
               }
             </div>
+            {/* ── RENPHO CSV IMPORT ── */}
+            <div className="sec-h">Importar Datos Renpho</div>
+            <div className="card" style={{marginBottom:14}}>
+              <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
+                Importa el CSV exportado desde la app Renpho (báscula inteligente). Los datos se agregarán a tu historial de composición corporal en CUERPO.
+              </p>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12,lineHeight:1.8}}>
+                📱 App Renpho → Perfil → Exportar datos → CSV
+              </div>
+              <input ref={renphoRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>handleRenphoFile(e.target.files[0])}/>
+              <button className="btn" style={{width:"100%",background:"rgba(168,255,62,.08)",color:"#a8ff3e",border:"1px solid rgba(168,255,62,.3)"}}
+                onClick={()=>renphoRef.current.click()} disabled={renphoLoading}>
+                {renphoLoading ? <><span>LEYENDO CSV</span><span className="dots"><span/><span/><span/></span></> : "📥 IMPORTAR CSV RENPHO"}
+              </button>
+            </div>
+
             <div className="sec-h">Backup & Restaurar</div>
             <div className="card">
               <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
@@ -3674,6 +3905,44 @@ Analiza este día y responde SOLO JSON sin backticks:
           </div>
         )}
 
+
+      {/* ══ RENPHO PREVIEW MODAL ══ */}
+      {showRenphoModal && renphoPreview && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowRenphoModal(false)}>
+          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:640,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#a8ff3e"}}>📥 RENPHO — PREVIEW DE IMPORTACIÓN</div>
+              <button onClick={()=>setShowRenphoModal(false)} style={{background:"none",border:"none",color:"#8888a8",cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>
+              {renphoPreview.length} mediciones detectadas · Se omitirán duplicados de fechas ya existentes
+            </div>
+            <div style={{overflowY:"auto",flex:1,marginBottom:12}}>
+              <table className="tbl">
+                <thead><tr><th>Fecha</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th></tr></thead>
+                <tbody>
+                  {renphoPreview.slice(0,20).map((r,i)=>(
+                    <tr key={i}>
+                      <td className="mono" style={{color:"#8888a8"}}>{r.d}</td>
+                      <td className="mono" style={{color:"#e8e8f0"}}>{r.w} kg</td>
+                      <td className="mono" style={{color:"#3ddc84"}}>{r.m ? r.m+" kg" : "—"}</td>
+                      <td className="mono" style={{color:"#ffb830"}}>{r.f ? r.f+"%" : "—"}</td>
+                      <td className="mono" style={{color:"#4dc8ff"}}>{r.vi ?? "—"}</td>
+                    </tr>
+                  ))}
+                  {renphoPreview.length>20 && <tr><td colSpan={5} className="mono" style={{color:"#44445a",textAlign:"center"}}>... y {renphoPreview.length-20} más</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn" style={{flex:1,background:"rgba(168,255,62,.12)",color:"#a8ff3e",border:"1px solid rgba(168,255,62,.3)"}} onClick={confirmRenphoImport}>
+                ✓ IMPORTAR {renphoPreview.length} MEDICIONES
+              </button>
+              <button className="btn-sm" onClick={()=>setShowRenphoModal(false)}>CANCELAR</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ IMPORT MODAL ══ */}
       {importJson && (
