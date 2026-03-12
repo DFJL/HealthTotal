@@ -306,9 +306,32 @@ body{background:#0c0c0f;color:#e8e8f0;font-family:'Instrument Sans',sans-serif;f
   .notif-inner{padding:0 16px 12px!important;}
   .score-strip{padding:8px 0!important;}
   .score-strip-badge{padding:8px 14px!important;}
-  .score-strip-ind{padding:8px 12px!important;}
-  .tab-content{padding:16px 14px 90px!important;}
+  .score-strip-ind{padding:8px 10px!important;min-width:70px!important;font-size:8px!important;}
+  .tab-content{padding:16px 12px 90px!important;}
   .sub-tabs{padding:0 4px!important;}
+  /* Tables: always scrollable on mobile */
+  .tbl-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch;}
+  /* Cards: reduce padding */
+  .card{padding:12px!important;}
+  /* Sec headers: tighter */
+  .sec-h{font-size:9px!important;margin-bottom:12px!important;}
+  /* Onboarding card */
+  .onboard-card{width:100%!important;max-width:100%!important;padding:20px 16px!important;}
+  /* Score tab: stack trajectory cards */
+  .traj-grid{grid-template-columns:1fr 1fr!important;}
+  /* Labs comparison table */
+  .labs-cmp{font-size:9px!important;}
+  .labs-cmp th,.labs-cmp td{padding:7px 8px!important;}
+  /* HOY — food log entry items */
+  .food-entry-row{flex-wrap:wrap!important;}
+  /* Hide less critical columns in tables on very small screens */
+  .hide-xs{display:none!important;}
+  /* Charts: shorter on mobile */
+  .chart-wrap .recharts-responsive-container{height:160px!important;}
+}
+@media(max-width:400px){
+  .traj-grid{grid-template-columns:1fr!important;}
+  .g2,.g3{grid-template-columns:1fr!important;}
 }
 @media(min-width:641px){
   .mobile-bottom-nav{display:none!important;}
@@ -1996,7 +2019,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       )}
 
       {/* ── TAB CONTENT ── */}
-      <div className="tab-content" style={{padding:"24px 44px 80px",maxWidth:1200}}>
+      <div className="tab-content" style={{padding:"24px 44px 80px",maxWidth:1200,boxSizing:"border-box"}}>
 
         {/* ══ HOY ══ */}
         {tab==="hoy" && (
@@ -2707,7 +2730,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 <div className="sec-h">Correlación Nutrición × Cuerpo</div>
                 <div className="card" style={{marginBottom:14}}>
                   <div className="lbl" style={{marginBottom:12}}>Promedio nutricional por semana (últimas 4)</div>
-                  <div style={{overflowX:"auto"}}>
+                  <div className="tbl-wrap" style={{overflowX:"auto"}}>
                     <table className="tbl">
                       <thead><tr><th>Semana</th><th>Kcal/día</th><th>Prot/día</th><th>A+B %</th><th>LDL+</th><th>Fotos</th></tr></thead>
                       <tbody>
@@ -2822,7 +2845,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               const fMax = Math.ceil(Math.max(...chartData.map(r=>r.f||0))/2)*2;
               return (<>
             <div className="sec-h">Progresión — {chartData[0]?fmtD(chartData[0].d):''} a {chartData[chartData.length-1]?fmtD(chartData[chartData.length-1].d):''} ({chartData.length} mediciones)</div>
-            <div className="card" style={{padding:"16px 10px",marginBottom:20}}>
+            <div className="card chart-wrap" style={{padding:"16px 10px",marginBottom:20}}>
               <ResponsiveContainer key={`inbody-chart-${tab}-${inbodySourceFilter}`} width="100%" height={220}>
                 <LineChart data={chartData} margin={{top:5,right:10,bottom:5,left:0}}>
                   <XAxis dataKey="dLabel" tick={{fill:"#44445a",fontSize:8,fontFamily:"JetBrains Mono"}} interval="preserveStartEnd"/>
@@ -2853,9 +2876,9 @@ Analiza este día y responde SOLO JSON sin backticks:
                 ⚠ Renpho y InBody usan algoritmos distintos — valores no directamente comparables
               </div>
             </div>
-            <div className="card" style={{overflowX:"auto",marginBottom:20}}>
+            <div className="card tbl-wrap" style={{marginBottom:20}}>
               <table className="tbl">
-                <thead><tr><th>Fecha</th><th>Fuente</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th>WHR</th><th>Score</th><th>Nota</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Fuente</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th className="hide-xs">WHR</th><th className="hide-xs">Score</th><th>Nota</th></tr></thead>
                 <tbody>
                   {[...allInbody].reverse().map(r=>{
                     const src = r.source||"inbody";
@@ -2870,8 +2893,8 @@ Analiza este día y responde SOLO JSON sin backticks:
                       <td className="mono" style={{color:"#4dc8ff"}}>{r.m ?? "—"}{r.m?" kg":""}</td>
                       <td className="mono" style={{color:!r.f?"#44445a":r.f<=14.5?"#3ddc84":r.f<=17?"#a8ff3e":r.f<=19?"#ffb830":"#ff4d4d"}}>{r.f!=null?r.f+"%":"—"}</td>
                       <td className="mono" style={{color:!r.vi?"#44445a":r.vi<=5?"#3ddc84":"#ffb830"}}>{r.vi??"—"}</td>
-                      <td className="mono" style={{color:!r.whr?"#44445a":r.whr<=0.90?"#3ddc84":"#ffb830"}}>{r.whr??"—"}</td>
-                      <td className="mono" style={{color:!r.s?"#44445a":r.s>=85?"#3ddc84":r.s>=80?"#4dc8ff":"#44445a"}}>{r.s??"—"}</td>
+                      <td className="mono hide-xs" style={{color:!r.whr?"#44445a":r.whr<=0.90?"#3ddc84":"#ffb830"}}>{r.whr??"—"}</td>
+                      <td className="mono hide-xs" style={{color:!r.s?"#44445a":r.s>=85?"#3ddc84":r.s>=80?"#4dc8ff":"#44445a"}}>{r.s??"—"}</td>
                       <td style={{fontSize:10,color:"#8888a8"}}>{r.note}</td>
                     </tr>
                     );
@@ -2978,7 +3001,7 @@ Analiza este día y responde SOLO JSON sin backticks:
 
 
             <div className="sec-h">Tendencia de Lípidos</div>
-            <div className="card" style={{padding:"16px 10px",marginBottom:20}}>
+            <div className="card chart-wrap" style={{padding:"16px 10px",marginBottom:20}}>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={labResults} margin={{top:5,right:10,bottom:5,left:0}}>
                   <XAxis dataKey="date" tick={{fill:"#44445a",fontSize:9,fontFamily:"JetBrains Mono"}}/>
@@ -3014,7 +3037,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             </div>
 
             <div className="sec-h">Perfil Lipídico Completo — {labResults.length} Medición{labResults.length!==1?"es":""}</div>
-            <div className="card" style={{overflowX:"auto",marginBottom:20}}>
+            <div className="card tbl-wrap" style={{marginBottom:20}}>
               <table className="tbl">
                 <thead>
                   <tr>
