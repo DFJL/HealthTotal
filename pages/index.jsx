@@ -3936,68 +3936,84 @@ Analiza este día y responde SOLO JSON sin backticks:
               const angleRad = angleDeg * Math.PI / 180;
               const nx = cx + (R-10)*Math.cos(angleRad);
               const ny = cy - (R-10)*Math.sin(angleRad);
-              const negItems = ["Falta de sueño","Alimentos azucarados","Estrés crónico","Sedentarismo"];
+              const negItems = ["Falta de sueño","Azúcares / ultraprocesados","Estrés crónico","Sedentarismo"];
               const posItems = ["Proteína alta","Ejercicio regular","Grasas saludables","Tracking diario"];
               return (
                 <div style={{marginBottom:28}}>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:12,textAlign:"center"}}>METABOLIC HEALTH SCORE</div>
-                  <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-                    {/* Negative factors */}
-                    <div style={{textAlign:"right",minWidth:110}}>
-                      {negItems.map(t=>(
-                        <div key={t} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff7a4d",marginBottom:5,letterSpacing:".02em"}}>{t}</div>
-                      ))}
-                    </div>
-                    {/* SVG Gauge */}
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"min(340px,100%)",height:"auto",overflow:"visible"}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:16,textAlign:"center"}}>METABOLIC HEALTH SCORE</div>
+
+                  {/* ── Gauge SVG (standalone, centered, no side text overlap) ── */}
+                  <div style={{display:"flex",justifyContent:"center",marginBottom:10}}>
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"min(320px,100%)",height:"auto",overflow:"visible"}}>
                       <defs>
                         <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                           <stop offset="0%"   stopColor="#ff6b6b"/>
-                          <stop offset="40%"  stopColor="#ffb830"/>
-                          <stop offset="70%"  stopColor="#d4f574"/>
+                          <stop offset="45%"  stopColor="#ffb830"/>
+                          <stop offset="72%"  stopColor="#d4f574"/>
                           <stop offset="100%" stopColor="#3ddc84"/>
                         </linearGradient>
                         <filter id="needleGlow">
-                          <feGaussianBlur stdDeviation="2" result="blur"/>
+                          <feGaussianBlur stdDeviation="2.5" result="blur"/>
                           <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                         </filter>
                       </defs>
-                      {/* Outer arc (thick) */}
+                      {/* Track bg */}
                       <path d={`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`}
-                        fill="none" stroke="url(#gaugeGrad)" strokeWidth="36" strokeLinecap="butt" opacity="0.9"/>
-                      {/* Inner cutout to make it look like a ring */}
+                        fill="none" stroke="#1a1a22" strokeWidth="38"/>
+                      {/* Colored arc */}
+                      <path d={`M ${cx-R} ${cy} A ${R} ${R} 0 0 1 ${cx+R} ${cy}`}
+                        fill="none" stroke="url(#gaugeGrad)" strokeWidth="36" strokeLinecap="butt" opacity="0.92"/>
+                      {/* Inner dark cutout */}
                       <path d={`M ${cx-rInner} ${cy} A ${rInner} ${rInner} 0 0 1 ${cx+rInner} ${cy}`}
                         fill="#0c0c0f" stroke="none"/>
                       {/* Base line */}
-                      <line x1={cx-R-8} y1={cy} x2={cx+R+8} y2={cy} stroke="#2a2a38" strokeWidth="1"/>
+                      <line x1={cx-R-10} y1={cy} x2={cx+R+10} y2={cy} stroke="#2a2a38" strokeWidth="1"/>
+                      {/* End dots */}
+                      <circle cx={cx-R} cy={cy} r="4" fill="#ff6b6b" opacity=".6"/>
+                      <circle cx={cx+R} cy={cy} r="4" fill="#3ddc84" opacity=".6"/>
                       {/* Needle */}
                       {score!=null && (
                         <g filter="url(#needleGlow)">
                           <line x1={cx} y1={cy} x2={nx} y2={ny}
-                            stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
-                          <circle cx={cx} cy={cy} r="6" fill="#1a1a22" stroke="white" strokeWidth="2"/>
+                            stroke="rgba(255,255,255,0.95)" strokeWidth="2.5" strokeLinecap="round"/>
+                          <circle cx={cx} cy={cy} r="7" fill="#1a1a22" stroke="rgba(255,255,255,0.7)" strokeWidth="2"/>
                         </g>
                       )}
-                      {/* Score label */}
-                      <text x={cx} y={cy-18} textAnchor="middle"
-                        fontFamily="Syne,sans-serif" fontWeight="800" fontSize="38" fill={scoreColor}>
+                      {/* Score number — inside the arc, not sitting on the arc */}
+                      <text x={cx} y={cy-32} textAnchor="middle"
+                        fontFamily="Syne,sans-serif" fontWeight="800" fontSize="44" fill={scoreColor}>
                         {score ?? "—"}
                       </text>
-                      <text x={cx} y={cy-2} textAnchor="middle"
+                      <text x={cx} y={cy-14} textAnchor="middle"
                         fontFamily="JetBrains Mono,monospace" fontSize="11" fill="#44445a">/ 100</text>
-                      {/* Poor / Optimal labels */}
-                      <text x={cx-R+4} y={cy+16} textAnchor="middle"
-                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#8888a8">Bajo</text>
-                      <text x={cx+R-4} y={cy+16} textAnchor="middle"
-                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#8888a8">Óptimo</text>
-                      {/* Status label */}
-                      <text x={cx} y={cy+28} textAnchor="middle"
-                        fontFamily="Syne,sans-serif" fontWeight="700" fontSize="13" fill={scoreColor}>{statusLabel}</text>
+                      {/* Bajo / Óptimo — below the baseline, not on the arc */}
+                      <text x={cx-R+2} y={cy+20} textAnchor="middle"
+                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#666680">Bajo</text>
+                      <text x={cx+R-2} y={cy+20} textAnchor="middle"
+                        fontFamily="JetBrains Mono,monospace" fontSize="9" fill="#666680">Óptimo</text>
+                      {/* Status badge */}
+                      <rect x={cx-38} y={cy+26} width="76" height="18" rx="3" fill={scoreColor+"22"}/>
+                      <text x={cx} y={cy+38} textAnchor="middle"
+                        fontFamily="Syne,sans-serif" fontWeight="700" fontSize="11" fill={scoreColor}>{statusLabel}</text>
                     </svg>
-                    {/* Positive factors */}
-                    <div style={{textAlign:"left",minWidth:110}}>
+                  </div>
+
+                  {/* ── Factors row — BELOW the gauge, no overlap ── */}
+                  <div style={{display:"flex",justifyContent:"center",gap:16,flexWrap:"wrap",marginBottom:4}}>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>Factores ⬇</div>
+                      {negItems.map(t=>(
+                        <div key={t} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:"11px",color:"#ff8060",marginBottom:3,display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
+                          <span>{t}</span><span style={{width:6,height:6,borderRadius:"50%",background:"#ff6b6b",display:"inline-block",flexShrink:0}}/>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>Factores ⬆</div>
                       {posItems.map(t=>(
-                        <div key={t} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginBottom:5,letterSpacing:".02em"}}>{t}</div>
+                        <div key={t} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:"11px",color:"#3ddc84",marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
+                          <span style={{width:6,height:6,borderRadius:"50%",background:"#3ddc84",display:"inline-block",flexShrink:0}}/><span>{t}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -4123,7 +4139,14 @@ Analiza este día y responde SOLO JSON sin backticks:
 
 
 
-                {tab==="timeline" && (()=>{
+
+
+          </div>
+          );
+        })()}
+
+
+        {tab==="timeline" && (()=>{
           const today = todayStr();
 
           // ── Pre-clean ──
@@ -4412,10 +4435,6 @@ Analiza este día y responde SOLO JSON sin backticks:
             })()}
 
           </div>
-          );
-        })()}
-
-            </div>
           );
         })()}
 
