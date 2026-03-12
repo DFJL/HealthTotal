@@ -896,6 +896,12 @@ function AppInner() {
   const [selDate, setSelDate] = useState(todayStr());
   const [showAdd, setShowAdd] = useState(false);
   const [addMode, setAddMode] = useState("ai");
+  const [offQuery, setOffQuery] = useState("");
+  const [offResults, setOffResults] = useState([]);
+  const [offLoading, setOffLoading] = useState(false);
+  const [offSelected, setOffSelected] = useState(null); // selected product
+  const [offGrams, setOffGrams] = useState(100);
+  const [offSearched, setOffSearched] = useState(false);
   const [selMeal, setSelMeal]       = useState("Desayuno");
   const [selDayType, setSelDayType] = useState("entreno");
   const [aiInput, setAiInput] = useState("");
@@ -1166,6 +1172,53 @@ function AppInner() {
 
   const resetAdd = () => { setShowAdd(false); setAiResult(null); setAiInput(""); setAiImage(null); setAiB64(null); };
   const addEntry = e => { const nl={...log,[selDate]:[...dayLog,{...e,meal:e.meal||selMeal,dayType:e.dayType||selDayType,id:Date.now()}]}; saveLog(nl, selDate); resetAdd(); };
+
+  const searchOFF = async (q) => {
+    if (!q.trim()) { setOffResults([]); setOffSearched(false); return; }
+    setOffLoading(true); setOffSelected(null); setOffSearched(true);
+    try {
+      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,image_small_url,categories_tags`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const products = (data.products||[]).filter(p => {
+        const n = p.nutriments;
+        return p.product_name && n && (n['energy-kcal_100g']||n['energy-kcal']) && n['proteins_100g']!=null;
+      }).map(p => {
+        const n = p.nutriments;
+        return {
+          name: p.product_name,
+          brand: p.brands,
+          cal100: Math.round(n['energy-kcal_100g'] || (n['energy-kcal']||0)),
+          prot100: parseFloat((n['proteins_100g']||0).toFixed(1)),
+          carb100: parseFloat((n['carbohydrates_100g']||0).toFixed(1)),
+          fat100: parseFloat((n['fat_100g']||0).toFixed(1)),
+          fiber100: parseFloat((n['fiber_100g']||0).toFixed(1)),
+          serving: p.serving_size||null,
+          img: p.image_small_url||null,
+        };
+      });
+      setOffResults(products);
+    } catch(e) { setOffResults([]); }
+    setOffLoading(false);
+  };
+
+  const addOFF = () => {
+    if (!offSelected) return;
+    const g = offGrams / 100;
+    const grade = offSelected.prot100 >= 15 && offSelected.fat100 <= 15 && offSelected.cal100 <= 250 ? 'A'
+      : offSelected.prot100 >= 10 && offSelected.cal100 <= 400 ? 'B'
+      : offSelected.cal100 <= 500 ? 'C' : 'D';
+    addEntry({
+      name: offSelected.name + (offSelected.brand ? ` (${offSelected.brand})` : '') + ` — ${offGrams}g`,
+      calories: Math.round(offSelected.cal100 * g),
+      protein: parseFloat((offSelected.prot100 * g).toFixed(1)),
+      carbs: parseFloat((offSelected.carb100 * g).toFixed(1)),
+      fats: parseFloat((offSelected.fat100 * g).toFixed(1)),
+      grade, score: grade==='A'?9:grade==='B'?7:grade==='C'?5:3,
+      source: 'off',
+    });
+    setOffSelected(null); setOffQuery(''); setOffResults([]); setOffSearched(false); setOffGrams(100);
+  };
 
   const compressForAI = (dataUrl, callback) => {
     const img = new Image();
@@ -2178,7 +2231,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
                 <div style={{height:1,background:"#2a2a38",marginBottom:12}}/>
                 <div style={{display:"flex",gap:6,marginBottom:14}}>
-                  {[["ai","🤖 IA"],["manual","✏ Manual"],["fav","⭐ Favs"]].map(([m,l])=>(
+                  {[["ai","🤖 IA"],["off","🔍 Buscar"],["manual","✏ Manual"],["fav","⭐ Favs"]].map(([m,l])=>(
                     <button key={m} onClick={()=>setAddMode(m)} style={{
                       flex:1,padding:"7px 4px",border:"none",borderRadius:3,cursor:"pointer",
                       background:addMode===m?"#a8ff3e":"#1a1a22",
@@ -2240,6 +2293,124 @@ Analiza este día y responde SOLO JSON sin backticks:
                         {aiResult.notes && <div style={{fontSize:12,color:"#3ddc84",marginBottom:6}}>💡 {aiResult.notes}</div>}
                         {aiResult.alerta && <div style={{fontSize:12,color:"#ffb830"}}>⚠️ {aiResult.alerta}</div>}
                         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginTop:10,textAlign:"center",letterSpacing:".1em"}}>✓ AGREGADO AL LOG</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {addMode==="off" && (
+                  <div>
+                    {/* Search bar */}
+                    <div style={{display:"flex",gap:6,marginBottom:10}}>
+                      <input
+                        className="inp" style={{flex:1}}
+                        placeholder="ej: chicken breast, avocado, arroz integral..."
+                        value={offQuery}
+                        onChange={e=>setOffQuery(e.target.value)}
+                        onKeyDown={e=>e.key==="Enter"&&searchOFF(offQuery)}
+                      />
+                      <button className="btn" style={{padding:"0 14px",flexShrink:0}} onClick={()=>searchOFF(offQuery)} disabled={offLoading}>
+                        {offLoading ? <span className="dots"><span/><span/><span/></span> : "🔍"}
+                      </button>
+                    </div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:10,letterSpacing:".06em"}}>
+                      FUENTE: OPEN FOOD FACTS · BASE DE DATOS COLABORATIVA GLOBAL
+                    </div>
+
+                    {/* Results list */}
+                    {offSearched && !offLoading && offResults.length===0 && (
+                      <div style={{textAlign:"center",padding:"20px 0",fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
+                        SIN RESULTADOS — probá en inglés o cambiá términos
+                      </div>
+                    )}
+                    {!offSelected && offResults.length>0 && (
+                      <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+                        {offResults.map((p,i)=>(
+                          <div key={i} onClick={()=>{setOffSelected(p);setOffGrams(100);}}
+                            style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
+                              background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,cursor:"pointer",
+                              transition:"border-color .12s"}}
+                            onMouseEnter={e=>e.currentTarget.style.borderColor="#a8ff3e44"}
+                            onMouseLeave={e=>e.currentTarget.style.borderColor="#2a2a38"}>
+                            {p.img && <img src={p.img} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:3,background:"#131318",flexShrink:0}}/>}
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,
+                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                              {p.brand && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:1}}>{p.brand}</div>}
+                            </div>
+                            <div style={{flexShrink:0,textAlign:"right"}}>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#a8ff3e"}}>{p.cal100}</div>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>kcal/100g</div>
+                            </div>
+                            <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,textAlign:"right",minWidth:52}}>
+                              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#4dc8ff"}}>P {p.prot100}g</span>
+                              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ffb830"}}>C {p.carb100}g</span>
+                              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#ff7a4d"}}>G {p.fat100}g</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Product detail + grams selector */}
+                    {offSelected && (
+                      <div className="fade-in" style={{background:"#1a1a22",border:"1px solid #a8ff3e44",borderRadius:4,padding:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,marginBottom:2}}>{offSelected.name}</div>
+                            {offSelected.brand && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{offSelected.brand}</div>}
+                          </div>
+                          <button onClick={()=>setOffSelected(null)} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:16,lineHeight:1,padding:2}}>✕</button>
+                        </div>
+
+                        {/* Grams input */}
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",letterSpacing:".08em"}}>CANTIDAD</span>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+                            <button onClick={()=>setOffGrams(g=>Math.max(5,g-10))}
+                              style={{width:28,height:28,borderRadius:3,border:"none",background:"#2a2a38",color:"#e8e8f0",cursor:"pointer",fontSize:16,lineHeight:1}}>−</button>
+                            <input type="number" value={offGrams} min={1} max={2000}
+                              onChange={e=>setOffGrams(Math.max(1,Number(e.target.value)||100))}
+                              className="inp" style={{width:72,textAlign:"center",padding:"5px 8px"}}/>
+                            <button onClick={()=>setOffGrams(g=>Math.min(2000,g+10))}
+                              style={{width:28,height:28,borderRadius:3,border:"none",background:"#2a2a38",color:"#e8e8f0",cursor:"pointer",fontSize:16,lineHeight:1}}>+</button>
+                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>g</span>
+                          </div>
+                          {offSelected.serving && (
+                            <button onClick={()=>{const n=parseFloat(offSelected.serving);if(n>0)setOffGrams(Math.round(n));}}
+                              style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",padding:"4px 8px",borderRadius:3,border:"1px solid #2a2a38",background:"transparent",color:"#8888a8",cursor:"pointer"}}>
+                              1 porción ({offSelected.serving})
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Macro preview scaled to grams */}
+                        {(()=>{
+                          const g = offGrams/100;
+                          const cal = Math.round(offSelected.cal100*g);
+                          const prot = (offSelected.prot100*g).toFixed(1);
+                          const carb = (offSelected.carb100*g).toFixed(1);
+                          const fat = (offSelected.fat100*g).toFixed(1);
+                          const fiber = offSelected.fiber100 ? (offSelected.fiber100*g).toFixed(1) : null;
+                          return (
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                              {[[cal,"kcal","#a8ff3e"],[prot+"g","Proteína","#4dc8ff"],[carb+"g","Carbos","#ffb830"],[fat+"g","Grasa","#ff7a4d"]].map(([v,l,c])=>(
+                                <div key={l} style={{background:"#131318",borderRadius:3,padding:"8px 6px",textAlign:"center",borderTop:`2px solid ${c}`}}>
+                                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,color:c}}>{v}</div>
+                                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>{l}</div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                        {offSelected.fiber100>0 && (
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginBottom:10}}>
+                            🌿 Fibra: {(offSelected.fiber100*offGrams/100).toFixed(1)}g
+                          </div>
+                        )}
+                        <button className="btn" style={{width:"100%"}} onClick={addOFF}>
+                          ✓ AGREGAR {offGrams}g A REGISTRO
+                        </button>
                       </div>
                     )}
                   </div>
