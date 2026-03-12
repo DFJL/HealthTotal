@@ -820,11 +820,14 @@ function calcMetabolicScore(labResults=[], allInbody=[], log={}, targets={}) {
     });
     const streak = (()=>{
       let s = 0;
+      // Use local date (not UTC) to avoid timezone offset breaking the streak
+      const localKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const today = new Date();
-      for (let i=0; i<14; i++) {
+      // If today has no entries yet, still allow streak to count from yesterday
+      const startOffset = log[localKey(today)]?.length > 0 ? 0 : 1;
+      for (let i=startOffset; i<30; i++) {
         const d = new Date(today); d.setDate(d.getDate()-i);
-        const key = d.toISOString().split("T")[0];
-        if (log[key]?.length > 0) s++; else break;
+        if (log[localKey(d)]?.length > 0) s++; else break;
       }
       return s;
     })();
