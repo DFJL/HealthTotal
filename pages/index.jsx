@@ -23,25 +23,25 @@ const INITIAL_FAVS = [
 ];
 
 const SEED_INBODY = [
-  {d:"Ago'18",w:69.3,m:55.1,f:16.4,s:null,vi:4,whr:0.85,note:"Baseline"},
-  {d:"Abr'19",w:68.0,m:32.2,f:16.1,s:80,vi:4,whr:0.84,note:""},
-  {d:"May'19",w:68.1,m:32.2,f:16.3,s:79,vi:4,whr:0.85,note:""},
-  {d:"Jul'19",w:70.9,m:34.5,f:14.4,s:null,vi:4,whr:0.84,note:""},
-  {d:"Ago'19",w:70.1,m:33.6,f:15.6,s:82,vi:4,whr:0.83,note:""},
-  {d:"Oct'19",w:70.6,m:34.0,f:15.7,s:82,vi:4,whr:0.86,note:""},
-  {d:"Nov'19",w:70.2,m:33.4,f:16.3,s:81,vi:4,whr:0.85,note:""},
-  {d:"Dic'19",w:70.3,m:32.9,f:17.6,s:79,vi:4,whr:0.86,note:""},
-  {d:"Ene'20",w:70.9,m:34.7,f:14.0,s:83,vi:4,whr:0.86,note:"Min grasa ★"},
-  {d:"Feb'20",w:71.5,m:34.7,f:14.9,s:82,vi:4,whr:0.87,note:""},
-  {d:"Ene'21",w:72.0,m:34.6,f:15.3,s:82,vi:4,whr:0.86,note:""},
-  {d:"Abr'21",w:73.5,m:35.4,f:15.6,s:82,vi:4,whr:0.87,note:""},
-  {d:"Jul'21",w:74.8,m:36.6,f:14.6,s:85,vi:4,whr:0.90,note:""},
-  {d:"Sep'22",w:78.2,m:38.5,f:14.3,s:88,vi:4,whr:0.84,note:"Récord músculo ★"},
-  {d:"Ene'25",w:83.4,m:38.5,f:19.3,s:null,vi:7,whr:0.93,note:""},
-  {d:"Mar'25",w:83.7,m:39.0,f:18.9,s:null,vi:6,whr:0.94,note:""},
-  {d:"May'25",w:82.8,m:38.4,f:19.4,s:null,vi:6,whr:0.94,note:""},
-  {d:"Nov'25",w:83.7,m:38.2,f:20.6,s:null,vi:6,whr:0.93,note:"Peor grasa"},
-  {d:"Feb'26",w:82.8,m:38.5,f:19.0,s:null,vi:6,whr:0.93,note:"HOY ◀"},
+  {d:"2018-08-01",w:69.3,m:55.1,f:16.4,s:null,vi:4,whr:0.85,note:"Baseline"},
+  {d:"2019-04-01",w:68.0,m:32.2,f:16.1,s:80,vi:4,whr:0.84,note:""},
+  {d:"2019-05-01",w:68.1,m:32.2,f:16.3,s:79,vi:4,whr:0.85,note:""},
+  {d:"2019-07-01",w:70.9,m:34.5,f:14.4,s:null,vi:4,whr:0.84,note:""},
+  {d:"2019-08-01",w:70.1,m:33.6,f:15.6,s:82,vi:4,whr:0.83,note:""},
+  {d:"2019-10-01",w:70.6,m:34.0,f:15.7,s:82,vi:4,whr:0.86,note:""},
+  {d:"2019-11-01",w:70.2,m:33.4,f:16.3,s:81,vi:4,whr:0.85,note:""},
+  {d:"2019-12-01",w:70.3,m:32.9,f:17.6,s:79,vi:4,whr:0.86,note:""},
+  {d:"2020-01-01",w:70.9,m:34.7,f:14.0,s:83,vi:4,whr:0.86,note:"Min grasa ★"},
+  {d:"2020-02-01",w:71.5,m:34.7,f:14.9,s:82,vi:4,whr:0.87,note:""},
+  {d:"2021-01-01",w:72.0,m:34.6,f:15.3,s:82,vi:4,whr:0.86,note:""},
+  {d:"2021-04-01",w:73.5,m:35.4,f:15.6,s:82,vi:4,whr:0.87,note:""},
+  {d:"2021-07-01",w:74.8,m:36.6,f:14.6,s:85,vi:4,whr:0.90,note:""},
+  {d:"2022-09-01",w:78.2,m:38.5,f:14.3,s:88,vi:4,whr:0.84,note:"Récord músculo ★"},
+  {d:"2025-01-01",w:83.4,m:38.5,f:19.3,s:null,vi:7,whr:0.93,note:""},
+  {d:"2025-03-01",w:83.7,m:39.0,f:18.9,s:null,vi:6,whr:0.94,note:""},
+  {d:"2025-05-01",w:82.8,m:38.4,f:19.4,s:null,vi:6,whr:0.94,note:""},
+  {d:"2025-11-01",w:83.7,m:38.2,f:20.6,s:null,vi:6,whr:0.93,note:"Peor grasa"},
+  {d:"2026-02-01",w:82.8,m:38.5,f:19.0,s:null,vi:6,whr:0.93,note:"HOY ◀"},
 ];
 
 const SEED_LABS = [
@@ -893,6 +893,7 @@ function AppInner() {
   const [showManualInbody, setShowManualInbody] = useState(false);
   const [manualInbody, setManualInbody] = useState({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
   const [customInbody, setCustomInbody] = useState([]);
+  const [inbodySourceFilter, setInbodySourceFilter] = useState('all'); // 'all' | 'inbody' | 'renpho' | 'manual'
   const [bodyMeasurements, setBodyMeasurements] = useState([]);
   const [labResults, setLabResults] = useState([]);
   // Labs upload
@@ -1466,11 +1467,28 @@ Analiza este día y responde SOLO JSON sin backticks:
   const totalEntries = allEntries.length;
 
   // ── Combined InBody data ──
+  // Parse any date format to sortable number
+  // Handles: YYYY-MM-DD, YYYY-MM, Mes'YY (legacy)
   const parseInbodyDate = d => {
-    const months={Ene:0,Feb:1,Mar:2,Abr:3,May:4,Jun:5,Jul:6,Ago:7,Sep:8,Oct:9,Nov:10,Dic:11};
+    if (!d) return 0;
+    if (/^\d{4}-\d{2}/.test(d)) {
+      const [y,m,day='01'] = d.split('-');
+      return parseInt(y)*10000 + parseInt(m)*100 + parseInt(day||'01');
+    }
+    const months={Ene:1,Feb:2,Mar:3,Abr:4,May:5,Jun:6,Jul:7,Ago:8,Sep:9,Oct:10,Nov:11,Dic:12};
     const m=d.match(/([A-Za-z]+)'(\d+)/);
     if(!m) return 0;
-    return (2000+parseInt(m[2]))*100+(months[m[1]]??0);
+    return (2000+parseInt(m[2]))*10000+(months[m[1]]??1)*100+1;
+  };
+  // Display: 2021-01-12 → Ene'21 | 2021-01 → Ene'21 | Mes'YY → unchanged
+  const fmtD = d => {
+    if (!d) return '—';
+    const MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    if (/^\d{4}-\d{2}/.test(d)) {
+      const [y,m] = d.split('-');
+      return MES[parseInt(m)-1]+"'"+String(y).slice(2);
+    }
+    return d; // legacy already formatted
   };
   // Merge DB + custom, deduplicate by date (DB wins), sort chronologically
   const allInbodyRaw = [...bodyMeasurements, ...customInbody];
@@ -1568,7 +1586,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       let [dd, mm, yy] = dateParts.map(Number);
       if (isNaN(dd)||isNaN(mm)||isNaN(yy)) continue;
       const yyyy = yy < 100 ? 2000 + yy : yy;
-      const d = `${yyyy}-${String(mm).padStart(2,"0")}'${String(dd).padStart(2,"0")}`;
+      const d = `${yyyy}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
 
       const num = (idx) => {
         if (idx<0 || !cols[idx] || cols[idx]==="--" || cols[idx]==="") return null;
@@ -2727,7 +2745,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
             )}
 
-            <div className="sec-h">Estado Actual{lastInbody ? ` — ${lastInbody.d}` : ""}</div>
+            <div className="sec-h">Estado Actual{lastInbody ? ` — ${fmtD(lastInbody.d)}` : ""}</div>
             {!lastInbody ? (
               <div style={{textAlign:"center",padding:"32px 0"}}>
                 <div style={{fontSize:36,marginBottom:12}}>⚖️</div>
@@ -2745,14 +2763,14 @@ Analiza este día y responde SOLO JSON sin backticks:
                 const tmb = lastInbody.m ? Math.round(370 + 21.6*lastInbody.m) : Math.round(10*lastInbody.w + 6.25*175 - 5*39 + 5);
                 return [
                   {l:"Peso",v:lastInbody.w,u:"kg",d:peakW>lastInbody.w?`Peak ${peakW} kg (${peakWDate})`:"Peso mínimo actual",sub:`Objetivo: ${targets.weightGoal||80} kg`,c:"#a8ff3e"},
-                  {l:"Masa Muscular",v:lastInbody.m??'—',u:"kg",d:firstM?`+${(lastInbody.m-firstM).toFixed(1)} kg vs ${allInbody[0].d}`:"Primera medición",sub:`Objetivo: ≥${targets.muscleGoal||39} kg`,c:"#3ddc84"},
+                  {l:"Masa Muscular",v:lastInbody.m??'—',u:"kg",d:firstM?`+${(lastInbody.m-firstM).toFixed(1)} kg vs ${fmtD(allInbody[0].d)}`:"Primera medición",sub:`Objetivo: ≥${targets.muscleGoal||39} kg`,c:"#3ddc84"},
                   {l:"% Grasa",v:lastInbody.f??'—',u:"%",d:`Mejor: ${bestF}% (${bestFDate})`,sub:`Objetivo: ${targets.fatGoal||"15–16"}%`,c:"#ffb830"},
                   {l:"Grasa Visceral",v:lastInbody.vi||"—",u:"lvl",d:(lastInbody.vi||0)<10?"Rango saludable (<10)":(lastInbody.vi||0)<15?"Riesgo moderado":"Riesgo alto",sub:`TMB: ${tmb.toLocaleString()} kcal/día`,c:"#4dc8ff"},
                 ].map(x=>(
                   <div key={x.l} className="card" style={{borderTop:`2px solid ${x.c}`}}>
                     <div className="lbl">{x.l}</div>
                     <div className="bnum" style={{color:x.c}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginTop:5}}>{x.d}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#3ddc84",marginTop:5}}>{fmtD(x.d)}</div>
                     <div style={{fontSize:11,color:"#8888a8",marginTop:3}}>{x.sub}</div>
                   </div>
                 ));
@@ -2760,14 +2778,55 @@ Analiza este día y responde SOLO JSON sin backticks:
             </div>
             )}
 
-            <div className="sec-h">Progresión — 2018 a 2026 ({allInbody.length} mediciones)</div>
+            {/* ── Source filter ── */}
+            {(()=>{
+              const sources = [...new Set(allInbody.map(r=>r.source||'inbody'))];
+              const srcLabels = {inbody:'📊 InBody',renpho:'⚖️ Renpho',manual:'✏️ Manual'};
+              const srcColors = {inbody:'#4dc8ff',renpho:'#a8ff3e',manual:'#8888a8'};
+              if (sources.length < 2) return null;
+              return (
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'9px',color:'#44445a',letterSpacing:'.1em'}}>FUENTE:</span>
+                  {['all',...sources].map(s=>(
+                    <button key={s} onClick={()=>setInbodySourceFilter(s)} style={{
+                      fontFamily:"'JetBrains Mono',monospace",fontSize:'9px',letterSpacing:'.08em',
+                      padding:'3px 10px',borderRadius:3,cursor:'pointer',border:'none',
+                      background: inbodySourceFilter===s ? (s==='all'?'#a8ff3e':srcColors[s]) : '#1a1a22',
+                      color: inbodySourceFilter===s ? '#0c0c0f' : (s==='all'?'#8888a8':srcColors[s]),
+                      outline: inbodySourceFilter===s ? 'none' : `1px solid ${s==='all'?'#2a2a38':srcColors[s]+'44'}`,
+                    }}>
+                      {s==='all' ? 'TODAS' : srcLabels[s]||s.toUpperCase()}
+                    </button>
+                  ))}
+                  {inbodySourceFilter!=='all' && (
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:'8px',color:'#ff9940',marginLeft:4}}>
+                      ⚠ Algoritmos distintos — comparación orientativa
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Filtered data ── */}
+            {(()=>{
+              const chartData = (inbodySourceFilter==='all'
+                ? allInbody
+                : allInbody.filter(r=>(r.source||'inbody')===inbodySourceFilter)
+              ).map(r=>({...r, dLabel:fmtD(r.d)}));
+              const wMin = Math.floor(Math.min(...chartData.map(r=>r.w||99))/5)*5;
+              const wMax = Math.ceil(Math.max(...chartData.map(r=>r.w||0))/5)*5;
+              const fMin = Math.floor(Math.min(...chartData.map(r=>r.f||99))/2)*2;
+              const fMax = Math.ceil(Math.max(...chartData.map(r=>r.f||0))/2)*2;
+              return (<>
+            <div className="sec-h">Progresión — {chartData[0]?fmtD(chartData[0].d):''} a {chartData[chartData.length-1]?fmtD(chartData[chartData.length-1].d):''} ({chartData.length} mediciones)</div>
             <div className="card" style={{padding:"16px 10px",marginBottom:20}}>
-              <ResponsiveContainer key={`inbody-chart-${tab}`} width="100%" height={220}>
-                <LineChart data={allInbody} margin={{top:5,right:10,bottom:5,left:0}}>
-                  <XAxis dataKey="d" tick={{fill:"#44445a",fontSize:8,fontFamily:"JetBrains Mono"}} interval={1}/>
-                  <YAxis yAxisId="w" tick={{fill:"#8888a8",fontSize:9}} domain={[65,90]}/>
-                  <YAxis yAxisId="f" orientation="right" tick={{fill:"#8888a8",fontSize:9}} domain={[12,24]}/>
-                  <Tooltip contentStyle={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,fontSize:11}}/>
+              <ResponsiveContainer key={`inbody-chart-${tab}-${inbodySourceFilter}`} width="100%" height={220}>
+                <LineChart data={chartData} margin={{top:5,right:10,bottom:5,left:0}}>
+                  <XAxis dataKey="dLabel" tick={{fill:"#44445a",fontSize:8,fontFamily:"JetBrains Mono"}} interval="preserveStartEnd"/>
+                  <YAxis yAxisId="w" tick={{fill:"#8888a8",fontSize:9}} domain={[wMin,wMax]}/>
+                  <YAxis yAxisId="f" orientation="right" tick={{fill:"#8888a8",fontSize:9}} domain={[fMin,fMax]}/>
+                  <Tooltip contentStyle={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:4,fontSize:11}}
+                    formatter={(val,name)=>[val,name]} labelFormatter={l=>l}/>
                   <Legend wrapperStyle={{fontSize:10,fontFamily:"JetBrains Mono",color:"#8888a8"}}/>
                   <Line yAxisId="w" type="monotone" dataKey="w" stroke="#a8ff3e" strokeWidth={2} dot={{r:2,fill:"#a8ff3e"}} name="Peso (kg)"/>
                   <Line yAxisId="w" type="monotone" dataKey="m" stroke="#4dc8ff" strokeWidth={2} dot={{r:2,fill:"#4dc8ff"}} name="Músculo (kg)" connectNulls/>
@@ -2775,6 +2834,8 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            </>);
+            })()}
 
             <div className="sec-h">Historial de Mediciones</div>
             {/* Source legend */}
@@ -2800,7 +2861,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                     const isNew = r.note?.includes("HOY")||r.note?.includes("Nuevo")||r.note?.includes("◀");
                     return (
                     <tr key={r.d+(r.source||"")+(r.w||"")} style={{background:isNew&&src==="inbody"?"rgba(77,200,255,.04)":isNew&&src==="renpho"?"rgba(168,255,62,.04)":""}}>
-                      <td className="mono" style={{color:isNew?"#e8e8f0":"#8888a8",fontWeight:isNew?600:400}}>{r.d}</td>
+                      <td className="mono" style={{color:isNew?"#e8e8f0":"#8888a8",fontWeight:isNew?600:400}}>{fmtD(r.d)}</td>
                       <td><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:col,background:col+"18",borderRadius:2,padding:"1px 5px"}}>{ic} {src.toUpperCase()}</span></td>
                       <td className="mono">{r.w} kg</td>
                       <td className="mono" style={{color:"#4dc8ff"}}>{r.m ?? "—"}{r.m?" kg":""}</td>
@@ -3949,7 +4010,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                 <tbody>
                   {renphoPreview.slice(0,20).map((r,i)=>(
                     <tr key={i}>
-                      <td className="mono" style={{color:"#8888a8"}}>{r.d}</td>
+                      <td className="mono" style={{color:"#8888a8"}}>{fmtD(r.d)}</td>
                       <td className="mono" style={{color:"#e8e8f0"}}>{r.w} kg</td>
                       <td className="mono" style={{color:"#3ddc84"}}>{r.m ? r.m+" kg" : "—"}</td>
                       <td className="mono" style={{color:"#ffb830"}}>{r.f ? r.f+"%" : "—"}</td>
