@@ -1525,38 +1525,65 @@ Analiza este día y responde SOLO JSON sin backticks:
   const notifColors = {warn:"#ffb830",alert:"#ff4d4d",info:"#4dc8ff",success:"#3ddc84"};
 
   // ── Renpho CSV parser ──────────────────────────────────────────
+  // Real Renpho CSV format:
+  // Date, Time, Weight(kg),BMI,Body Fat(%),Skeletal Muscle(%),Fat-Free Mass(kg),
+  // Subcutaneous Fat(%),Visceral Fat,Water(%),Muscle Mass(kg),Bone Mass(kg),
+  // Protein (%),BMR(kcal),Metabolic Age,...
+  // Date format: DD/M/YY (e.g. 11/3/26 = March 11, 2026)
   const parseRenphoCSV = (text) => {
     const lines = text.trim().split(/\r?\n/);
     if (lines.length < 2) return [];
-    // Renpho column headers (case-insensitive, trim)
-    const headers = lines[0].split(",").map(h=>h.trim().toLowerCase().replace(/[()]/g,"").replace(/\s+/g,"_"));
+    // Normalize headers
+    const rawHeaders = lines[0].split(",").map(h=>h.trim().toLowerCase()
+      .replace(/[()%]/g,"").replace(/\s+/g,"_").replace(/-/g,"_"));
+    const findCol = (...keys) => keys.map(k=>rawHeaders.findIndex(h=>h.includes(k))).find(i=>i>=0) ?? -1;
+
+    const iDate   = findCol("date");
+    const iTime   = findCol("time");
+    const iWeight = findCol("weight");
+    const iFat    = findCol("body_fat");
+    const iMuscle = findCol("muscle_mass");         // "Muscle Mass(kg)" — actual kg
+    const iSkelPct= findCol("skeletal_muscle");      // "Skeletal Muscle(%)" — percentage, fallback
+    const iVisceral= findCol("visceral_fat");
+    const iBMR    = findCol("bmr");
+    const iMetAge = findCol("metabolic_age");
+    const iWater  = findCol("water");
+    const iBone   = findCol("bone_mass");
+    const iBMI    = findCol("bmi");
+
     const rows = [];
     for (let i=1; i<lines.length; i++) {
       const cols = lines[i].split(",").map(s=>s.trim().replace(/"/g,""));
-      if (cols.length < 3 || !cols[0]) continue;
-      const get = (...keys) => {
-        for (const k of keys) {
-          const idx = headers.findIndex(h=>h.includes(k));
-          if (idx>=0 && cols[idx] && cols[idx]!=="") return parseFloat(cols[idx])||null;
-        }
-        return null;
+      if (!cols[iDate] || cols[iDate]==="--") continue;
+
+      // Parse date: DD/M/YY or DD/MM/YY → YYYY-MM-DD-style
+      const dateParts = cols[iDate].split("/");
+      if (dateParts.length<3) continue;
+      let [dd, mm, yy] = dateParts.map(Number);
+      if (isNaN(dd)||isNaN(mm)||isNaN(yy)) continue;
+      const yyyy = yy < 100 ? 2000 + yy : yy;
+      const d = `${yyyy}-${String(mm).padStart(2,"0")}'${String(dd).padStart(2,"0")}`;
+
+      const num = (idx) => {
+        if (idx<0 || !cols[idx] || cols[idx]==="--" || cols[idx]==="") return null;
+        const v = parseFloat(cols[idx]);
+        return isNaN(v) ? null : v;
       };
-      // Parse date — Renpho format: "2024-01-15 08:30:00" or "2024/01/15"
-      const rawDate = cols[0] || cols[headers.findIndex(h=>h.includes("time")||h.includes("date"))];
-      if (!rawDate) continue;
-      const dateMatch = rawDate.match(/(\d{4})[/-](\d{2})[/-](\d{2})/);
-      if (!dateMatch) continue;
-      const d = `${dateMatch[1]}-${dateMatch[2]}'${dateMatch[3]}`;
-      const w = get("weight");
+
+      const w = num(iWeight);
       if (!w) continue; // weight required
-      const m = get("muscle_mass","skeletal_muscle","muscle");
-      const f = get("body_fat_rate","body_fat","fat_rate","fat");
-      const vi = get("visceral_fat","visceral");
-      const water = get("body_water","water");
-      const bone = get("bone_mass","bone");
-      const bmr = get("bmr","basal_metabolic");
-      const metAge = get("metabolic_age");
-      rows.push({ d, w, m, f, vi, water, bone, bmr, metAge, note:"Renpho ◀" });
+
+      // Prefer Muscle Mass(kg) over Skeletal Muscle(%)
+      const m = num(iMuscle);
+      const f = num(iFat);
+      const vi = num(iVisceral);
+      const bmr = num(iBMR);
+      const metAge = num(iMetAge);
+      const water = num(iWater);
+      const bone = num(iBone);
+      const bmi = num(iBMI);
+
+      rows.push({ d, w, m, f, vi, bmr, metAge, water, bone, bmi, note:"Renpho ◀" });
     }
     return rows.sort((a,b)=>a.d.localeCompare(b.d));
   };
@@ -1689,7 +1716,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   const latestLab = labResults[labResults.length-1];
   const MODULES = [
     {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
-    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","INBODY"],["labs","LABS"],["score","SCORE"]]},
+    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","MEDICIONES"],["labs","LABS"],["score","SCORE"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
   ];
@@ -2765,142 +2792,6 @@ Analiza este día y responde SOLO JSON sin backticks:
 
             {/* Upload new InBody */}
 
-            {/* ══ HEALTH TRAJECTORY ══ */}
-            {(()=>{
-              if (allInbody.length < 2 && labResults.length < 2) return (
-                <div>
-                  <div className="sec-h">Trayectoria de Salud</div>
-                  <div className="card" style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em"}}>SE NECESITAN AL MENOS 2 MEDICIONES</div>
-                    <div style={{fontSize:11,marginTop:6}}>Agrega más datos de InBody o Labs para calcular tu trayectoria.</div>
-                  </div>
-                </div>
-              );
-
-              // ── Slope calculator: linear regression on last N points ──
-              const slope = (vals) => {
-                const pts = vals.filter(v=>v!=null&&!isNaN(v));
-                if (pts.length<2) return null;
-                const n=pts.length, sx=pts.reduce((s,_,i)=>s+i,0), sy=pts.reduce((s,v)=>s+v,0);
-                const sxy=pts.reduce((s,v,i)=>s+i*v,0), sx2=pts.reduce((s,_,i)=>s+i*i,0);
-                return (n*sxy-sx*sy)/(n*sx2-sx*sx);
-              };
-
-              const dir = (s, higherIsBetter=false) => {
-                if (s===null) return {icon:"—",label:"Sin datos",color:"#44445a"};
-                const abs = Math.abs(s);
-                if (abs < 0.05) return {icon:"→",label:"Estable",color:"#8888a8"};
-                const improving = higherIsBetter ? s>0 : s<0;
-                return improving
-                  ? {icon:"⬆",label:"Mejorando",color:"#3ddc84"}
-                  : {icon:"⬇",label:"Deteriorando",color:"#ff4d4d"};
-              };
-
-              // Body composition trends (from allInbody)
-              const ibW   = allInbody.map(x=>x.w);
-              const ibM   = allInbody.map(x=>x.m);
-              const ibF   = allInbody.map(x=>x.f);
-              const ibVi  = allInbody.map(x=>x.vi);
-              const lastIB = allInbody[allInbody.length-1];
-
-              // Lab trends
-              const labsSorted = [...labResults].sort((a,b)=>a.date.localeCompare(b.date));
-              const lbLDL  = labsSorted.map(x=>x.ldl);
-              const lbHDL  = labsSorted.map(x=>x.hdl);
-              const lbTG   = labsSorted.map(x=>x.tg);
-              const lbHBA  = labsSorted.map(x=>x.hba1c);
-              const lbGlu  = labsSorted.map(x=>x.glucose);
-
-              // TG/HDL ratio trend
-              const tgHdlSeries = labsSorted.map(x=>(x.tg&&x.hdl)?parseFloat((x.tg/x.hdl).toFixed(2)):null);
-
-              const trajectories = [
-                {label:"Peso corporal", unit:"kg", cur:lastIB?.w, slope:slope(ibW), higher:false, icon:"⚖️"},
-                {label:"Masa muscular", unit:"kg", cur:lastIB?.m, slope:slope(ibM), higher:true, icon:"💪"},
-                {label:"% Grasa",       unit:"%",  cur:lastIB?.f, slope:slope(ibF), higher:false, icon:"🔥"},
-                {label:"Grasa visceral",unit:"lvl",cur:lastIB?.vi,slope:slope(ibVi),higher:false, icon:"🫀"},
-                {label:"LDL",          unit:"mg/dL",cur:labsSorted[labsSorted.length-1]?.ldl, slope:slope(lbLDL), higher:false, icon:"🩸"},
-                {label:"HDL",          unit:"mg/dL",cur:labsSorted[labsSorted.length-1]?.hdl, slope:slope(lbHDL), higher:true,  icon:"🛡"},
-                {label:"HbA1c",        unit:"%",    cur:labsSorted[labsSorted.length-1]?.hba1c,slope:slope(lbHBA),higher:false, icon:"🍬"},
-                {label:"TG/HDL ratio", unit:"",     cur:tgHdlSeries.filter(v=>v).slice(-1)[0], slope:slope(tgHdlSeries.filter(v=>v)), higher:false, icon:"📉"},
-              ].filter(t=>t.cur!=null && t.slope!==null);
-
-              if (trajectories.length===0) return null;
-
-              // Overall trajectory score: count improving
-              const improving = trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬆").length;
-              const deteriorating = trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬇").length;
-              const overallColor = improving>deteriorating?"#3ddc84":deteriorating>improving?"#ff4d4d":"#ffb830";
-              const overallLabel = improving>deteriorating?"↗ MEJORANDO":deteriorating>improving?"↘ DETERIORANDO":"→ ESTABLE";
-
-              // 6-month projection: current + slope * 6
-              const project = (cur, s) => cur && s!==null ? parseFloat((cur + s*6).toFixed(1)) : null;
-
-              return (
-                <div>
-                  <div className="sec-h">Trayectoria de Salud</div>
-                  {/* Overall banner */}
-                  <div className="card" style={{marginBottom:14,borderLeft:`3px solid ${overallColor}`,borderRadius:"0 4px 4px 0",background:`rgba(${overallColor==="#3ddc84"?"61,220,132":overallColor==="#ff4d4d"?"255,77,77":"255,184,48"},.04)`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                      <div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:overallColor,letterSpacing:".15em",marginBottom:4}}>DIRECCIÓN GENERAL</div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:20,color:overallColor}}>{overallLabel}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>
-                          {improving} indicadores mejorando · {trajectories.length-improving-deteriorating} estables · {deteriorating} deteriorando
-                        </div>
-                      </div>
-                      <div style={{display:"flex",gap:6}}>
-                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#3ddc84",lineHeight:1}}>{improving}</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>MEJOR</div>
-                        </div>
-                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#ff4d4d",lineHeight:1}}>{deteriorating}</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>PEOR</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Per-indicator grid */}
-                  <div className="card" style={{marginBottom:14}}>
-                    <div className="lbl" style={{marginBottom:12}}>Indicadores individuales — pendiente + proyección 6 meses</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
-                      {trajectories.map(t=>{
-                        const {icon:dIcon,label:dLabel,color:dColor} = dir(t.slope, t.higher);
-                        const proj = project(t.cur, t.slope);
-                        const projDelta = proj ? parseFloat((proj-t.cur).toFixed(1)) : null;
-                        return (
-                          <div key={t.label} style={{background:"#131318",borderRadius:4,padding:"10px 12px",borderLeft:`2px solid ${dColor}`}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                              <div>
-                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em"}}>{t.icon} {t.label.toUpperCase()}</div>
-                                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#e8e8f0",lineHeight:1.2,marginTop:2}}>
-                                  {t.cur}<span style={{fontSize:10,color:"#44445a"}}> {t.unit}</span>
-                                </div>
-                              </div>
-                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:dColor}}>{dIcon}</div>
-                            </div>
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:dColor,marginBottom:4}}>{dLabel}</div>
-                            {proj && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
-                              6 meses: <span style={{color:dColor}}>{proj} {t.unit}</span>
-                              {projDelta!==null && <span style={{marginLeft:4}}>({projDelta>0?"+":""}{projDelta})</span>}
-                            </div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {/* Insight note */}
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:20,lineHeight:1.7,letterSpacing:".04em"}}>
-                    ⚠ Proyecciones calculadas con regresión lineal sobre datos históricos. Asumen adherencia constante al protocolo actual.
-                  </div>
-                </div>
-              );
-            })()}
-
-          </div>
-        )}
-
         {/* ══ LABS ══ */}
         {tab==="labs" && (
           <div>
@@ -3795,6 +3686,112 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               </div>
             )}
+
+            {/* ══ HEALTH TRAJECTORY ══ */}
+            {(()=>{
+              if (allInbody.length < 2 && labResults.length < 2) return (
+                <div>
+                  <div className="sec-h">Trayectoria de Salud</div>
+                  <div className="card" style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em"}}>SE NECESITAN AL MENOS 2 MEDICIONES</div>
+                    <div style={{fontSize:11,marginTop:6}}>Agrega más datos de InBody/Renpho o Labs para calcular tu trayectoria.</div>
+                  </div>
+                </div>
+              );
+              const slope = (vals) => {
+                const pts = vals.filter(v=>v!=null&&!isNaN(v));
+                if (pts.length<2) return null;
+                const n=pts.length, sx=pts.reduce((s,_,i)=>s+i,0), sy=pts.reduce((s,v)=>s+v,0);
+                const sxy=pts.reduce((s,v,i)=>s+i*v,0), sx2=pts.reduce((s,_,i)=>s+i*i,0);
+                return (n*sxy-sx*sy)/(n*sx2-sx*sx);
+              };
+              const dir = (s, higherIsBetter=false) => {
+                if (s===null) return {icon:"—",label:"Sin datos",color:"#44445a"};
+                if (Math.abs(s) < 0.05) return {icon:"→",label:"Estable",color:"#8888a8"};
+                return (higherIsBetter ? s>0 : s<0)
+                  ? {icon:"⬆",label:"Mejorando",color:"#3ddc84"}
+                  : {icon:"⬇",label:"Deteriorando",color:"#ff4d4d"};
+              };
+              const ibW=allInbody.map(x=>x.w), ibM=allInbody.map(x=>x.m), ibF=allInbody.map(x=>x.f), ibVi=allInbody.map(x=>x.vi);
+              const lastIB=allInbody[allInbody.length-1];
+              const labsSorted=[...labResults].sort((a,b)=>a.date.localeCompare(b.date));
+              const lastLab=labsSorted[labsSorted.length-1];
+              const tgHdlSeries=labsSorted.map(x=>(x.tg&&x.hdl)?parseFloat((x.tg/x.hdl).toFixed(2)):null).filter(v=>v);
+              const trajectories=[
+                {label:"Peso",          unit:"kg",     cur:lastIB?.w,       slope:slope(ibW),                                      higher:false, icon:"⚖️"},
+                {label:"Masa muscular", unit:"kg",     cur:lastIB?.m,       slope:slope(ibM),                                      higher:true,  icon:"💪"},
+                {label:"% Grasa",       unit:"%",      cur:lastIB?.f,       slope:slope(ibF),                                      higher:false, icon:"🔥"},
+                {label:"Grasa visceral",unit:"lvl",    cur:lastIB?.vi,      slope:slope(ibVi),                                     higher:false, icon:"🫀"},
+                {label:"LDL",           unit:"mg/dL",  cur:lastLab?.ldl,    slope:slope(labsSorted.map(x=>x.ldl)),                 higher:false, icon:"🩸"},
+                {label:"HDL",           unit:"mg/dL",  cur:lastLab?.hdl,    slope:slope(labsSorted.map(x=>x.hdl)),                 higher:true,  icon:"🛡"},
+                {label:"HbA1c",         unit:"%",      cur:lastLab?.hba1c,  slope:slope(labsSorted.map(x=>x.hba1c)),               higher:false, icon:"🍬"},
+                {label:"TG/HDL",        unit:"",       cur:tgHdlSeries.slice(-1)[0], slope:slope(tgHdlSeries),                    higher:false, icon:"📉"},
+              ].filter(t=>t.cur!=null && t.slope!==null);
+              if (trajectories.length===0) return null;
+              const improving=trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬆").length;
+              const deteriorating=trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬇").length;
+              const oColor=improving>deteriorating?"#3ddc84":deteriorating>improving?"#ff4d4d":"#ffb830";
+              const oLabel=improving>deteriorating?"↗ MEJORANDO":deteriorating>improving?"↘ DETERIORANDO":"→ ESTABLE";
+              const project=(cur,s)=>cur&&s!==null?parseFloat((cur+s*6).toFixed(1)):null;
+              return (
+                <div>
+                  <div className="sec-h" style={{marginTop:28}}>Trayectoria de Salud</div>
+                  <div className="card" style={{marginBottom:14,borderLeft:`3px solid ${oColor}`,borderRadius:"0 4px 4px 0",background:`rgba(${oColor==="#3ddc84"?"61,220,132":oColor==="#ff4d4d"?"255,77,77":"255,184,48"},.04)`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                      <div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:oColor,letterSpacing:".15em",marginBottom:4}}>DIRECCIÓN GENERAL</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:20,color:oColor}}>{oLabel}</div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>
+                          {improving} mejorando · {trajectories.length-improving-deteriorating} estables · {deteriorating} deteriorando
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#3ddc84",lineHeight:1}}>{improving}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>MEJOR</div>
+                        </div>
+                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#ff4d4d",lineHeight:1}}>{deteriorating}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>PEOR</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="card" style={{marginBottom:14}}>
+                    <div className="lbl" style={{marginBottom:12}}>Indicadores — proyección a 6 meses</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
+                      {trajectories.map(t=>{
+                        const {icon:dIcon,label:dLabel,color:dColor}=dir(t.slope,t.higher);
+                        const proj=project(t.cur,t.slope);
+                        const projDelta=proj?parseFloat((proj-t.cur).toFixed(1)):null;
+                        return (
+                          <div key={t.label} style={{background:"#131318",borderRadius:4,padding:"10px 12px",borderLeft:`2px solid ${dColor}`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                              <div>
+                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em"}}>{t.icon} {t.label.toUpperCase()}</div>
+                                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#e8e8f0",lineHeight:1.2,marginTop:2}}>
+                                  {t.cur}<span style={{fontSize:10,color:"#44445a"}}> {t.unit}</span>
+                                </div>
+                              </div>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:dColor}}>{dIcon}</div>
+                            </div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:dColor,marginBottom:4}}>{dLabel}</div>
+                            {proj && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
+                              6m: <span style={{color:dColor}}>{proj}{t.unit}</span>
+                              {projDelta!==null && <span style={{marginLeft:4}}>({projDelta>0?"+":""}{projDelta})</span>}
+                            </div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:20,lineHeight:1.7}}>
+                    ⚠ Proyecciones lineales sobre datos históricos. Asumen adherencia constante.
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
           );
         })()}
