@@ -4173,238 +4173,242 @@ Analiza este día y responde SOLO JSON sin backticks:
         })()}
 
         {tab==="timeline" && (()=>{
-          // ── Build unified event list from all data sources ──
-          const events = [];
-
-          // Helper: detect milestone flags on an inbody reading
-          const allW  = allInbody.map(r=>r.w).filter(Boolean);
-          const allM  = allInbody.map(r=>r.m).filter(Boolean);
-          const allF  = allInbody.map(r=>r.f).filter(Boolean);
+          // ── Globals ──
+          const allW = allInbody.map(r=>r.w).filter(Boolean);
+          const allM = allInbody.map(r=>r.m).filter(Boolean);
+          const allF = allInbody.map(r=>r.f).filter(Boolean);
           const peakW = allW.length ? Math.max(...allW) : null;
           const peakM = allM.length ? Math.max(...allM) : null;
           const minF  = allF.length ? Math.min(...allF) : null;
           const maxF  = allF.length ? Math.max(...allF) : null;
 
-          // InBody / Renpho / Manual events
-          allInbody.forEach(r => {
+          // ── FILTER: only body measurements that matter ──
+          // Criteria: first, last, hard milestones, OR significant delta vs previous
+          const W_THR = 1.5;   // kg weight change
+          const M_THR = 0.5;   // kg muscle change
+          const F_THR = 1.2;   // % fat change
+          const VI_THR = 2;    // visceral level change
+
+          const importantInbody = allInbody.filter((r, i, arr) => {
+            if (i === 0 || i === arr.length - 1) return true; // always first & last
+            const isMilestone = r.w===peakW || r.m===peakM || r.f===minF || r.f===maxF || (r.vi||0)>=10;
+            if (isMilestone) return true;
+            // Compare vs previous kept entry (not just adjacent — find prev in filtered so far)
+            const prev = arr[i-1];
+            const dW  = prev.w  != null && r.w  != null ? Math.abs(r.w  - prev.w)  : 0;
+            const dM  = prev.m  != null && r.m  != null ? Math.abs(r.m  - prev.m)  : 0;
+            const dF  = prev.f  != null && r.f  != null ? Math.abs(r.f  - prev.f)  : 0;
+            const dVI = prev.vi != null && r.vi != null ? Math.abs(r.vi - prev.vi) : 0;
+            return dW >= W_THR || dM >= M_THR || dF >= F_THR || dVI >= VI_THR;
+          });
+
+          // ── Build events ──
+          const events = [];
+
+          importantInbody.forEach((r, i) => {
             const flags = [];
-            if (r.w === peakW)  flags.push({icon:"⚖️", txt:"Peso máximo", col:"#ff7a4d"});
-            if (r.m === peakM)  flags.push({icon:"💪", txt:"Récord de músculo", col:"#3ddc84"});
-            if (r.f === minF)   flags.push({icon:"🔥", txt:"Mínimo % grasa", col:"#a8ff3e"});
-            if (r.f === maxF)   flags.push({icon:"⚠️", txt:"Máximo % grasa", col:"#ff4d4d"});
-            if (r.vi && r.vi >= 10) flags.push({icon:"🩺", txt:`Grasa visceral alta (${r.vi})`, col:"#ff9940"});
-            const src = r.source || "inbody";
-            const srcIcon = {inbody:"📊",renpho:"⚖️",manual:"✏️"}[src] || "📊";
-            const srcCol  = {inbody:"#4dc8ff",renpho:"#a8ff3e",manual:"#8888a8"}[src] || "#4dc8ff";
+            if (r.w === peakW)  flags.push({icon:"⚖️", txt:"Peso máximo",      col:"#ff7a4d"});
+            if (r.m === peakM)  flags.push({icon:"💪", txt:"Récord músculo",    col:"#3ddc84"});
+            if (r.f === minF)   flags.push({icon:"🔥", txt:"Mínimo % grasa",   col:"#a8ff3e"});
+            if (r.f === maxF)   flags.push({icon:"⚠️", txt:"Peor % grasa",     col:"#ff4d4d"});
+            if ((r.vi||0)>=10)  flags.push({icon:"🩺", txt:`Visceral alto (${r.vi})`, col:"#ff9940"});
+            if (i===0)          flags.push({icon:"📍", txt:"Medición inicial",  col:"#8888a8"});
+            if (i===importantInbody.length-1 && i>0) flags.push({icon:"📍", txt:"Última medición", col:"#4dc8ff"});
+
+            // Delta vs previous in importantInbody
+            let delta = null;
+            if (i > 0) {
+              const prev = importantInbody[i-1];
+              delta = {
+                dW: prev.w!=null && r.w!=null ? (r.w-prev.w).toFixed(1) : null,
+                dM: prev.m!=null && r.m!=null ? (r.m-prev.m).toFixed(1) : null,
+                dF: prev.f!=null && r.f!=null ? (r.f-prev.f).toFixed(1) : null,
+              };
+            }
+
+            const src    = r.source || "inbody";
+            const srcCol = {inbody:"#4dc8ff",renpho:"#a8ff3e",manual:"#8888a8"}[src] || "#4dc8ff";
             events.push({
-              date: r.d,
-              type: "body",
-              icon: srcIcon,
-              color: srcCol,
-              title: `${src.charAt(0).toUpperCase()+src.slice(1)} — ${r.w}kg · ${r.m??'—'}kg M · ${r.f??'—'}% G`,
-              subtitle: r.note || null,
-              flags,
-              data: r,
+              date: r.d, type:"body", icon:"📊", color:srcCol,
+              title: `${r.w}kg · ${r.m??'—'}kg M · ${r.f??'—'}% G${r.vi?` · Visceral ${r.vi}`:""}`,
+              subtitle: r.note && !r.note.includes("HOY") && !r.note.includes("◀") ? r.note : null,
+              flags, delta, data:r,
             });
           });
 
-          // Lab events
+          // All labs — always important
           labResults.forEach(r => {
             const labFlags = [];
             if (r.ldl) {
-              if (r.ldl > 190)      labFlags.push({icon:"🔴", txt:`LDL crítico ${r.ldl}`, col:"#ff4d4d"});
-              else if (r.ldl > 130) labFlags.push({icon:"🟡", txt:`LDL elevado ${r.ldl}`, col:"#ffb830"});
-              else if (r.ldl <= 100)labFlags.push({icon:"✅", txt:`LDL óptimo ${r.ldl}`, col:"#3ddc84"});
+              if (r.ldl > 190)       labFlags.push({icon:"🔴", txt:`LDL crítico ${r.ldl}`,  col:"#ff4d4d"});
+              else if (r.ldl > 130)  labFlags.push({icon:"🟡", txt:`LDL elevado ${r.ldl}`,  col:"#ffb830"});
+              else if (r.ldl <= 100) labFlags.push({icon:"✅", txt:`LDL óptimo ${r.ldl}`,   col:"#3ddc84"});
             }
             if (r.hba1c) {
-              if (r.hba1c >= 6.5)        labFlags.push({icon:"🔴", txt:`HbA1c diabético ${r.hba1c}%`, col:"#ff4d4d"});
-              else if (r.hba1c >= 5.7)   labFlags.push({icon:"🟡", txt:`HbA1c prediabetes ${r.hba1c}%`, col:"#ffb830"});
-              else                        labFlags.push({icon:"✅", txt:`HbA1c normal ${r.hba1c}%`, col:"#3ddc84"});
+              if (r.hba1c >= 6.5)      labFlags.push({icon:"🔴", txt:`HbA1c diabético ${r.hba1c}%`, col:"#ff4d4d"});
+              else if (r.hba1c >= 5.7) labFlags.push({icon:"🟡", txt:`Prediabetes ${r.hba1c}%`,     col:"#ffb830"});
+              else                     labFlags.push({icon:"✅", txt:`HbA1c normal ${r.hba1c}%`,     col:"#3ddc84"});
             }
             if (r.tg && r.hdl) {
               const ratio = (r.tg/r.hdl).toFixed(1);
-              if (ratio > 3.5) labFlags.push({icon:"⚠️", txt:`TG/HDL alto ${ratio}`, col:"#ff9940"});
-              else if (ratio <= 2) labFlags.push({icon:"✅", txt:`TG/HDL óptimo ${ratio}`, col:"#3ddc84"});
+              labFlags.push(ratio > 3.5
+                ? {icon:"⚠️", txt:`TG/HDL alto ${ratio}`,    col:"#ff9940"}
+                : ratio <= 2
+                ? {icon:"✅", txt:`TG/HDL óptimo ${ratio}`,  col:"#3ddc84"}
+                : {icon:"📊", txt:`TG/HDL ${ratio}`,         col:"#8888a8"}
+              );
             }
-            // Normalise date to YYYY-MM-DD for sorting
-            let dateNorm = r.date;
             const monthMap = {Ene:"01",Feb:"02",Mar:"03",Abr:"04",May:"05",Jun:"06",Jul:"07",Ago:"08",Sep:"09",Oct:"10",Nov:"11",Dic:"12"};
+            let dateNorm = r.date;
             const legMatch = r.date?.match(/^([A-Za-z]+)\s+(\d{4})$/);
             if (legMatch) dateNorm = `${legMatch[2]}-${monthMap[legMatch[1]]||"01"}-01`;
-            else if (/^\d{4}-\d{2}$/.test(r.date)) dateNorm = r.date + "-01";
+            else if (/^\d{4}-\d{2}$/.test(r.date)) dateNorm = r.date+"-01";
             events.push({
-              date: dateNorm,
-              type: "lab",
-              icon: "🩸",
-              color: "#ff9940",
-              title: `Labs — LDL ${r.ldl??'—'} · HDL ${r.hdl??'—'} · TC ${r.tc??'—'}${r.hba1c ? ` · HbA1c ${r.hba1c}%` : ""}`,
-              subtitle: r.date,
-              flags: labFlags,
-              data: r,
+              date:dateNorm, type:"lab", icon:"🩸", color:"#ff9940",
+              title:`LDL ${r.ldl??'—'} · HDL ${r.hdl??'—'} · TC ${r.tc??'—'}${r.hba1c?` · HbA1c ${r.hba1c}%`:""}`,
+              subtitle: r.date, flags:labFlags,
             });
           });
 
-          // Food log: first logged day
+          // Food log milestone — only first day
           const logDays = Object.keys(log).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
           if (logDays.length > 0) {
             events.push({
-              date: logDays[0],
-              type: "milestone",
-              icon: "🚀",
-              color: "#a8ff3e",
-              title: "Inicio del tracking nutricional",
-              subtitle: `Primer día registrado · ${logDays.length} días en total`,
-              flags: [],
+              date:logDays[0], type:"milestone", icon:"🚀", color:"#a8ff3e",
+              title:"Inicio del tracking nutricional",
+              subtitle:`${logDays.length} días registrados en total`,
+              flags:[],
             });
           }
 
-          // Body photos
+          // Photos — only keep 1 per month (most recent of each month)
+          const photoByMonth = {};
           bodyPhotos.forEach(p => {
+            const mo = (p.date||"").slice(0,7);
+            if (!photoByMonth[mo] || p.date > photoByMonth[mo].date) photoByMonth[mo] = p;
+          });
+          Object.values(photoByMonth).forEach(p => {
             events.push({
-              date: p.date,
-              type: "photo",
-              icon: "📸",
-              color: "#c084fc",
-              title: "Foto de progreso",
-              subtitle: p.note || null,
-              flags: [],
+              date:p.date, type:"photo", icon:"📸", color:"#c084fc",
+              title:"Foto de progreso",
+              subtitle: p.note||null, flags:[],
               img: p.b64 ? `data:image/jpeg;base64,${p.b64}` : null,
             });
           });
 
-          // Sort all events chronologically
-          events.sort((a,b) => (a.date||"").localeCompare(b.date||""));
+          events.sort((a,b)=>(b.date||"").localeCompare(a.date||"")); // newest first
 
-          // Detect body comp delta between consecutive inbody entries for delta badges
-          const bodyEvts = events.filter(e=>e.type==="body");
-          bodyEvts.forEach((e,i) => {
-            if (i===0) return;
-            const prev = bodyEvts[i-1];
-            const dW = e.data.w && prev.data.w ? (e.data.w - prev.data.w).toFixed(1) : null;
-            const dM = e.data.m != null && prev.data.m != null ? (e.data.m - prev.data.m).toFixed(1) : null;
-            const dF = e.data.f != null && prev.data.f != null ? (e.data.f - prev.data.f).toFixed(1) : null;
-            e.delta = {dW, dM, dF};
-          });
-
-          // Group by year for sections
+          // Group by year
           const byYear = {};
           events.forEach(e => {
-            const yr = (e.date||"????").slice(0,4);
-            if (!byYear[yr]) byYear[yr] = [];
+            const yr=(e.date||"????").slice(0,4);
+            if(!byYear[yr]) byYear[yr]=[];
             byYear[yr].push(e);
           });
-          const years = Object.keys(byYear).sort((a,b)=>b.localeCompare(a)); // newest first
+          const years = Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
 
-          // Type filter state — use a simple approach with window var hack inside IIFE
+          const typeColor = {body:"#4dc8ff",lab:"#ff9940",photo:"#c084fc",milestone:"#a8ff3e"};
+          const typeLabel = {body:"MEDICIÓN",lab:"LAB",photo:"FOTO",milestone:"HITO"};
+
           return (
             <div>
               <div className="sec-h">Metabolic Timeline</div>
               <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
-                Historia cronológica de tu composición corporal, laboratorios y hitos de salud metabólica.
+                Hitos y cambios significativos — mediciones con Δ≥{W_THR}kg peso / Δ≥{M_THR}kg músculo / Δ≥{F_THR}% grasa · todos los labs y fotos.
               </p>
 
-              {/* Summary stats bar */}
-              {(()=>{
-                const span = events.length >= 2
-                  ? Math.round((new Date(events[events.length-1].date) - new Date(events[0].date)) / (1000*60*60*24*365.25) * 10) / 10
-                  : null;
-                const bodyCount = events.filter(e=>e.type==="body").length;
-                const labCount  = events.filter(e=>e.type==="lab").length;
-                const photoCount= events.filter(e=>e.type==="photo").length;
-                return (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8,marginBottom:20}}>
-                    {[[span?`${span} años`:"—","Seguimiento","#a8ff3e"],[bodyCount,"Mediciones","#4dc8ff"],[labCount,"Labs","#ff9940"],[photoCount,"Fotos","#c084fc"],[logDays.length,"Días log","#3ddc84"]].map(([v,l,col])=>(
-                      <div key={l} style={{background:"#131318",border:"1px solid #1e1e2a",borderRadius:4,padding:"10px 12px",borderTop:`2px solid ${col}`}}>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:col}}>{v}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:3,letterSpacing:".08em"}}>{l}</div>
-                      </div>
-                    ))}
+              {/* Summary pills */}
+              <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+                {[[importantInbody.length,"Mediciones clave","#4dc8ff"],[labResults.length,"Labs","#ff9940"],[Object.keys(photoByMonth).length,"Fotos","#c084fc"]].map(([v,l,col])=>(
+                  <div key={l} style={{background:"#131318",border:`1px solid ${col}33`,borderRadius:4,padding:"8px 14px",display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:col}}>{v}</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".06em"}}>{l}</span>
                   </div>
-                );
-              })()}
+                ))}
+              </div>
 
               {/* Timeline */}
-              <div style={{position:"relative"}}>
-                {/* Vertical line */}
-                <div style={{position:"absolute",left:19,top:0,bottom:0,width:2,background:"linear-gradient(to bottom,#2a2a38,#1a1a22)",zIndex:0}}/>
+              <div style={{position:"relative",paddingLeft:52}}>
+                <div style={{position:"absolute",left:19,top:8,bottom:8,width:2,background:"linear-gradient(to bottom,#a8ff3e44,#2a2a38,#1a1a22)",borderRadius:2}}/>
 
-                {years.map(yr => (
+                {years.map(yr=>(
                   <div key={yr}>
-                    {/* Year header */}
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,marginTop:yr===years[0]?0:28,position:"relative",zIndex:1}}>
-                      <div style={{width:40,height:40,borderRadius:"50%",background:"#131318",border:"2px solid #a8ff3e",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:2}}>
-                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:10,color:"#a8ff3e"}}>{yr}</span>
-                      </div>
-                      <div style={{height:1,flex:1,background:"#2a2a38"}}/>
-                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",flexShrink:0}}>{byYear[yr].length} evento{byYear[yr].length!==1?"s":""}</span>
+                    {/* Year marker */}
+                    <div style={{position:"absolute",left:0,width:40,textAlign:"center",marginBottom:8}}>
+                      <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:9,color:"#a8ff3e",letterSpacing:".1em"}}>{yr}</span>
+                    </div>
+                    <div style={{marginBottom:4,paddingTop:2}}>
+                      <div style={{height:1,background:"#2a2a38",marginBottom:16}}/>
                     </div>
 
-                    {/* Events in this year */}
-                    {[...byYear[yr]].reverse().map((evt,i) => (
-                      <div key={i} style={{display:"flex",gap:12,marginBottom:14,position:"relative",zIndex:1}}>
-                        {/* Icon circle */}
-                        <div style={{width:40,height:40,borderRadius:"50%",background:"#1a1a22",border:`2px solid ${evt.color}`,
-                          display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,zIndex:2}}>
-                          {evt.icon}
-                        </div>
-                        {/* Content card */}
-                        <div style={{flex:1,background:"#131318",border:`1px solid ${evt.color}22`,borderLeft:`3px solid ${evt.color}`,
-                          borderRadius:"0 4px 4px 0",padding:"10px 14px",minWidth:0}}>
-                          {/* Date + type */}
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                    {byYear[yr].map((evt,i)=>(
+                      <div key={i} style={{position:"relative",marginBottom:18}}>
+                        {/* Dot on the line */}
+                        <div style={{position:"absolute",left:-39,top:10,width:14,height:14,borderRadius:"50%",
+                          background:evt.color,boxShadow:`0 0 8px ${evt.color}66`,zIndex:2}}/>
+                        {/* Card */}
+                        <div style={{background:"#131318",border:`1px solid ${evt.color}22`,
+                          borderLeft:`3px solid ${evt.color}`,borderRadius:"0 4px 4px 0",padding:"10px 14px"}}>
+                          {/* Header */}
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                            <span style={{fontSize:16}}>{evt.icon}</span>
                             <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>{fmtD(evt.date)}</span>
-                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 6px",letterSpacing:".08em"}}>
-                              {evt.type==="body"?"MEDICIÓN":evt.type==="lab"?"LAB":evt.type==="photo"?"FOTO":"HITO"}
+                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+                              color:evt.color,background:evt.color+"18",borderRadius:2,padding:"1px 6px",letterSpacing:".08em"}}>
+                              {typeLabel[evt.type]||evt.type.toUpperCase()}
                             </span>
                           </div>
                           {/* Title */}
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,marginBottom:evt.subtitle||evt.flags.length||evt.delta?6:0,lineHeight:1.3}}>
+                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13,lineHeight:1.3,
+                            marginBottom:(evt.subtitle||evt.flags?.length||evt.delta)?5:0}}>
                             {evt.title}
                           </div>
                           {/* Subtitle */}
-                          {evt.subtitle && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginBottom:evt.flags.length||evt.delta?5:0}}>{evt.subtitle}</div>}
-                          {/* Delta badges for body events */}
+                          {evt.subtitle && (
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",
+                              marginBottom:(evt.flags?.length||evt.delta)?5:0}}>{evt.subtitle}</div>
+                          )}
+                          {/* Delta badges */}
                           {evt.delta && (evt.delta.dW||evt.delta.dM||evt.delta.dF) && (
-                            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:evt.flags.length?5:0}}>
-                              {evt.delta.dW && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",
-                                color:parseFloat(evt.delta.dW)<0?"#3ddc84":parseFloat(evt.delta.dW)>1?"#ff7a4d":"#8888a8",
-                                background:"#1a1a22",borderRadius:2,padding:"2px 6px"}}>
-                                  Peso {parseFloat(evt.delta.dW)>0?"+":""}{evt.delta.dW}kg
-                              </span>}
-                              {evt.delta.dM!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",
-                                color:parseFloat(evt.delta.dM)>0?"#3ddc84":parseFloat(evt.delta.dM)<-0.5?"#ff4d4d":"#8888a8",
-                                background:"#1a1a22",borderRadius:2,padding:"2px 6px"}}>
-                                  Músculo {parseFloat(evt.delta.dM)>0?"+":""}{evt.delta.dM}kg
-                              </span>}
-                              {evt.delta.dF!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",
-                                color:parseFloat(evt.delta.dF)<0?"#3ddc84":parseFloat(evt.delta.dF)>1?"#ff4d4d":"#8888a8",
-                                background:"#1a1a22",borderRadius:2,padding:"2px 6px"}}>
-                                  Grasa {parseFloat(evt.delta.dF)>0?"+":""}{evt.delta.dF}%
-                              </span>}
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:evt.flags?.length?5:0}}>
+                              {[
+                                [evt.delta.dW,"kg","#8888a8",v=>parseFloat(v)<-0.5?"#3ddc84":parseFloat(v)>1?"#ff7a4d":"#8888a8"],
+                                [evt.delta.dM,"kg M","#4dc8ff",v=>parseFloat(v)>0?"#3ddc84":parseFloat(v)<-0.3?"#ff4d4d":"#8888a8"],
+                                [evt.delta.dF,"% G","#ff7a4d",v=>parseFloat(v)<0?"#3ddc84":parseFloat(v)>1?"#ff4d4d":"#8888a8"],
+                              ].map(([v,unit,_,colFn])=>v!=null&&(
+                                <span key={unit} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",
+                                  color:colFn(v),background:"#1a1a22",borderRadius:2,padding:"2px 7px"}}>
+                                  {parseFloat(v)>0?"+":""}{v}{unit}
+                                </span>
+                              ))}
                             </div>
                           )}
-                          {/* Milestone flags */}
-                          {evt.flags.length>0 && (
-                            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {/* Flags */}
+                          {evt.flags?.length>0 && (
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                               {evt.flags.map((f,fi)=>(
                                 <span key={fi} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
-                                  color:f.col,background:f.col+"18",borderRadius:10,padding:"2px 8px",
-                                  letterSpacing:".05em",display:"flex",alignItems:"center",gap:3}}>
+                                  color:f.col,background:f.col+"15",borderRadius:10,padding:"2px 8px",letterSpacing:".04em"}}>
                                   {f.icon} {f.txt}
                                 </span>
                               ))}
                             </div>
                           )}
-                          {/* Photo thumbnail */}
+                          {/* Photo */}
                           {evt.img && (
                             <img src={evt.img} alt="progreso"
-                              style={{marginTop:8,maxWidth:120,maxHeight:100,objectFit:"cover",borderRadius:3,border:"1px solid #2a2a38"}}/>
+                              style={{marginTop:8,maxWidth:100,maxHeight:90,objectFit:"cover",borderRadius:3,border:"1px solid #2a2a38"}}/>
                           )}
                         </div>
                       </div>
                     ))}
                   </div>
                 ))}
+                {events.length===0 && (
+                  <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a"}}>
+                    SIN EVENTOS — agrega mediciones o labs para ver tu timeline
+                  </div>
+                )}
               </div>
             </div>
           );
