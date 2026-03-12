@@ -983,6 +983,7 @@ function AppInner() {
   const [manualInbody, setManualInbody] = useState({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
   const [customInbody, setCustomInbody] = useState([]);
   const [inbodySourceFilter, setInbodySourceFilter] = useState('all'); // 'all' | 'inbody' | 'renpho' | 'manual'
+  const [briSource, setBriSource] = useState('all'); // source filter local to BRI card
   const [inbodyAgg, setInbodyAgg] = useState('auto'); // 'auto' | 'raw' | 'weekly' | 'monthly'
   const [tlSrc, setTlSrc] = useState('all'); // timeline source filter
   const [tableRows, setTableRows] = useState(15);
@@ -3131,19 +3132,31 @@ Analiza este día y responde SOLO JSON sin backticks:
             )}
 
             {/* ── BODY RECOMPOSITION INDEX ── */}
-            {lastFI && lastFI.m != null && lastFI.f != null && (()=>{
-              const fatMass   = parseFloat((lastFI.w * lastFI.f / 100).toFixed(1));
-              const muscleMass= lastFI.m;
-              const mfr       = parseFloat((muscleMass / fatMass).toFixed(2));  // muscle-to-fat ratio
-              const heightM   = (userProfile.height || 175) / 100;
-              const leanMass  = lastFI.w * (1 - lastFI.f / 100);
-              const ffmi      = parseFloat((leanMass / (heightM * heightM)).toFixed(1));
-              const whr       = lastFI.whr || null;
+            {allInbody.length > 0 && (()=>{
+              // Own source filter
+              const briFiltered = briSource === 'all'
+                ? allInbody
+                : allInbody.filter(r => (r.source||'inbody') === briSource);
+              const briLast = briFiltered[briFiltered.length - 1] || null;
+              if (!briLast || briLast.m == null || briLast.f == null) return null;
 
-              // Trend: compare last 2 inbody
-              const prev2 = filteredInbody.length >= 2 ? filteredInbody[filteredInbody.length - 2] : null;
-              const dM = prev2 && lastFI.m != null && prev2.m != null ? parseFloat((lastFI.m - prev2.m).toFixed(1)) : null;
-              const dF = prev2 && lastFI.f != null && prev2.f != null ? parseFloat((lastFI.f - prev2.f).toFixed(1)) : null;
+              const fatMass   = parseFloat((briLast.w * briLast.f / 100).toFixed(1));
+              const muscleMass= briLast.m;
+              const mfr       = parseFloat((muscleMass / fatMass).toFixed(2));
+              const heightM   = (userProfile.height || 175) / 100;
+              const leanMass  = briLast.w * (1 - briLast.f / 100);
+              const ffmi      = parseFloat((leanMass / (heightM * heightM)).toFixed(1));
+              const whr       = briLast.whr || null;
+
+              // Available sources for this card
+              const briSources = [...new Set(allInbody.map(r => r.source||'inbody'))];
+              const briSrcColors = {inbody:'#4dc8ff', renpho:'#a8ff3e', manual:'#8888a8'};
+              const briSrcLabels = {inbody:'InBody', renpho:'Renpho', manual:'Manual'};
+
+              // Trend: compare last 2 in briFiltered
+              const prev2 = briFiltered.length >= 2 ? briFiltered[briFiltered.length - 2] : null;
+              const dM = prev2 && briLast.m != null && prev2.m != null ? parseFloat((briLast.m - prev2.m).toFixed(1)) : null;
+              const dF = prev2 && briLast.f != null && prev2.f != null ? parseFloat((briLast.f - prev2.f).toFixed(1)) : null;
 
               let recompStatus, recompColor, recompIcon;
               if (dM !== null && dF !== null) {
@@ -3166,7 +3179,32 @@ Analiza este día y responde SOLO JSON sin backticks:
 
               return (
                 <div style={{marginBottom:20}}>
-                  <div className="sec-h">Body Recomposition Index</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:4}}>
+                    <div className="sec-h" style={{marginBottom:0}}>Body Recomposition Index</div>
+                    {briSources.length > 1 && (
+                      <div style={{display:"flex",gap:4}}>
+                        {['all',...briSources].map(s=>{
+                          const active = briSource===s;
+                          const col = s==='all'?'#8888a8':(briSrcColors[s]||'#8888a8');
+                          return (
+                            <button key={s} onClick={()=>setBriSource(s)} style={{
+                              fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",letterSpacing:".07em",
+                              padding:"3px 10px",borderRadius:3,cursor:"pointer",border:"none",
+                              background: active ? col : "transparent",
+                              color: active ? "#0c0c0f" : col,
+                              outline: active ? "none" : `1px solid ${col}55`,
+                              transition:"all .12s",
+                            }}>{s==='all'?'TODAS':(briSrcLabels[s]||s).toUpperCase()}</button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:10}}>
+                    Fuente: <strong style={{color: briSource==='all'?'#8888a8':(briSrcColors[briSource]||'#8888a8')}}>{briSource==='all'?'Todas las fuentes':(briSrcLabels[briSource]||briSource)}</strong>
+                    {briLast && <> · Última medición: <strong style={{color:"#e8e8f0"}}>{fmtD(briLast.d)}</strong></>}
+                    {briFiltered.length > 1 && <> · {briFiltered.length} mediciones</>}
+                  </div>
                   <div className="card" style={{marginBottom:12,borderTop:`2px solid ${recompColor}`}}>
                     {/* Status hero row */}
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
@@ -3213,11 +3251,11 @@ Analiza este día y responde SOLO JSON sin backticks:
                     <div style={{marginTop:12}}>
                       <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:4}}>
                         <span>Composición corporal</span>
-                        <span>Magra {(100-lastFI.f).toFixed(1)}% · Grasa {lastFI.f}%</span>
+                        <span>Magra {(100-briLast.f).toFixed(1)}% · Grasa {briLast.f}%</span>
                       </div>
                       <div style={{height:6,borderRadius:3,background:"#1a1a22",overflow:"hidden",display:"flex"}}>
-                        <div style={{flex:100-lastFI.f,background:"#3ddc84",transition:"flex .4s"}}/>
-                        <div style={{flex:lastFI.f,background:"#ffb830",transition:"flex .4s"}}/>
+                        <div style={{flex:100-briLast.f,background:"#3ddc84",transition:"flex .4s"}}/>
+                        <div style={{flex:briLast.f,background:"#ffb830",transition:"flex .4s"}}/>
                       </div>
                       <div style={{display:"flex",gap:12,marginTop:4,fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>
                         <span style={{color:"#3ddc84"}}>● Masa magra {(leanMass).toFixed(1)} kg</span>
@@ -3879,42 +3917,122 @@ ${generatedRoutine.notes?`<div class="footer"><strong>📝 Notas:</strong> ${gen
           if(muscleGain>0)
             insights.push({type:"good",icon:"💪",title:`Masa muscular +${muscleGain}kg`,text:`Tu protocolo nutricional está funcionando. Sigue priorizando proteína post-entreno y mantén el superávit calórico moderado en días de entreno.`});
 
-          // ── Detección de Estancamiento (plateau) ──
-          {
-            const last4weeks = allInbody
-              .filter(r => r.d && r.w != null)
-              .slice(-6); // últimas 6 mediciones para tener contexto
-            if (last4weeks.length >= 3) {
-              const recentW = last4weeks.slice(-4).map(r => r.w);
-              const wMax = Math.max(...recentW);
-              const wMin = Math.min(...recentW);
-              const wRange = parseFloat((wMax - wMin).toFixed(1));
-              const recentF = last4weeks.slice(-4).map(r => r.f).filter(v => v != null);
-              const fRange = recentF.length >= 2 ? parseFloat((Math.max(...recentF) - Math.min(...recentF)).toFixed(1)) : null;
-              // Plateau: peso varía < 0.6kg Y adherencia nutricional > 75%
-              const isWeightPlateau = wRange < 0.6 && recentW.length >= 3;
-              const isFatPlateau = fRange !== null && fRange < 0.5 && recentF.length >= 3;
-              const adherencia = abPct14;
-              if (isWeightPlateau && adherencia >= 75) {
-                insights.push({
-                  type:"warn",
-                  icon:"📊",
-                  title:"Posible estancamiento detectado",
-                  text:`El peso ha oscilado solo ${wRange} kg en las últimas ${recentW.length} mediciones (rango ${wMin}–${wMax} kg) con ${adherencia}% de adherencia nutricional.${isFatPlateau?" % grasa también estancada.":""} Opciones: refeed day, semana de descarga en entreno, ajustar déficit calórico, o simplemente confirmar con la próxima medición.`
-                });
-              } else if (isWeightPlateau && adherencia < 60) {
-                insights.push({
-                  type:"warn",
-                  icon:"⚠️",
-                  title:"Peso estancado — revisar adherencia",
-                  text:`Peso varía < ${wRange} kg en las últimas mediciones pero adherencia nutricional es ${adherencia}%. El peso no cambia porque el tracking es inconsistente. Registrar todo por 7 días dará una imagen real.`
-                });
-              }
+          // ── Detección de Estancamiento: compute outside JSX ──
+          const plateauData = (()=>{
+            const meas = allInbody.filter(r => r.d && r.w != null).slice(-6);
+            if (meas.length < 2) return null;
+            const recentW = meas.slice(-4).map(r => r.w);
+            const wMax = Math.max(...recentW); const wMin = Math.min(...recentW);
+            const wRange = parseFloat((wMax - wMin).toFixed(1));
+            const recentF = meas.slice(-4).map(r => r.f).filter(v => v != null);
+            const fRange = recentF.length >= 2 ? parseFloat((Math.max(...recentF) - Math.min(...recentF)).toFixed(1)) : null;
+            const isWeightPlateau = wRange < 0.8;
+            const isFatPlateau = fRange !== null && fRange < 0.6;
+            const adherencia = abPct14;
+            let status, color, icon, msg, advice;
+            if (isWeightPlateau && isFatPlateau && adherencia >= 70) {
+              status="Estancamiento real detectado"; color="#ff7a4d"; icon="⚠️";
+              msg=`Peso osciló solo ${wRange} kg y grasa solo ${fRange}% en las últimas ${recentW.length} mediciones con ${adherencia}% de adherencia.`;
+              advice="Opciones: refeed day 1×semana, semana de descarga en entreno, bajar 100-150 kcal, o cambiar distribución de macros.";
+            } else if (isWeightPlateau && adherencia >= 70) {
+              status="Peso estancado"; color="#ffb830"; icon="📊";
+              msg=`Peso varía solo ${wRange} kg entre mediciones (${wMin}–${wMax} kg) con buena adherencia (${adherencia}%).`;
+              advice="El peso puede estancarse mientras sigues recomponiendo (músculo ↑ grasa ↓). Revisa % grasa y masa muscular como métricas principales.";
+            } else if (isWeightPlateau && adherencia < 60) {
+              status="Peso estancado — tracking inconsistente"; color="#44445a"; icon="📋";
+              msg=`Peso varía solo ${wRange} kg pero adherencia nutricional es ${adherencia}%.`;
+              advice="El registro incompleto hace imposible detectar si hay estancamiento real. Registra todas las comidas por 7 días para tener datos fiables.";
+            } else {
+              status="Sin estancamiento"; color="#3ddc84"; icon="✅";
+              msg=`Peso varía ${wRange} kg entre mediciones — hay movimiento activo.${fRange!=null?" Grasa varía "+fRange+"%.":""}`;
+              advice="Sigue con el protocolo actual, hay progreso.";
             }
-          }
+            return { status, color, icon, msg, advice, wRange, fRange, wMin, wMax, recentW, adherencia, isWeightPlateau };
+          })();
 
           return (
           <div>
+            {/* ── DETECCIÓN DE ESTANCAMIENTO — siempre visible ── */}
+            {plateauData && (
+              <div style={{marginBottom:20}}>
+                <div className="sec-h">Detección de Estancamiento</div>
+                <div className="card" style={{borderTop:`2px solid ${plateauData.color}`}}>
+                  {/* Status row */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <span style={{fontSize:24,flexShrink:0}}>{plateauData.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:plateauData.color}}>{plateauData.status}</div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",marginTop:2,lineHeight:1.5}}>{plateauData.msg}</div>
+                    </div>
+                  </div>
+
+                  {/* Mini weight chart — last measurements */}
+                  {plateauData.recentW.length >= 2 && (()=>{
+                    const vals = plateauData.recentW;
+                    const minV = Math.min(...vals) - 0.5;
+                    const maxV = Math.max(...vals) + 0.5;
+                    const range = maxV - minV || 1;
+                    const W = 300, H = 48;
+                    const pts = vals.map((v,i) => {
+                      const x = vals.length === 1 ? W/2 : (i / (vals.length-1)) * W;
+                      const y = H - ((v - minV) / range) * H;
+                      return `${x},${y}`;
+                    }).join(" ");
+                    return (
+                      <div style={{marginBottom:12,overflow:"hidden"}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginBottom:4,letterSpacing:".1em"}}>
+                          ÚLTIMAS {vals.length} MEDICIONES — RANGO {plateauData.wMin}–{plateauData.wMax} kg (Δ{plateauData.wRange} kg)
+                        </div>
+                        <svg viewBox={`0 0 ${W} ${H+10}`} style={{width:"100%",height:58,display:"block"}}>
+                          <polyline points={pts} fill="none" stroke={plateauData.color} strokeWidth="2" strokeLinejoin="round"/>
+                          {vals.map((v,i) => {
+                            const x = vals.length === 1 ? W/2 : (i / (vals.length-1)) * W;
+                            const y = H - ((v - minV) / range) * H;
+                            return (<g key={i}>
+                              <circle cx={x} cy={y} r="3" fill={plateauData.color}/>
+                              <text x={x} y={y-6} textAnchor="middle" fontFamily="monospace" fontSize="8" fill="#8888a8">{v}</text>
+                            </g>);
+                          })}
+                          <line x1="0" y1={H} x2={W} y2={H} stroke="#2a2a38" strokeWidth="0.5"/>
+                        </svg>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Metrics pills */}
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                    <div style={{background:"#0c0c0f",borderRadius:3,padding:"7px 12px",fontFamily:"'JetBrains Mono',monospace"}}>
+                      <div style={{fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:2}}>VARIACIÓN PESO</div>
+                      <div style={{fontSize:14,fontWeight:700,color:plateauData.wRange<0.8?"#ffb830":"#3ddc84"}}>Δ {plateauData.wRange} kg</div>
+                    </div>
+                    {plateauData.fRange !== null && (
+                      <div style={{background:"#0c0c0f",borderRadius:3,padding:"7px 12px",fontFamily:"'JetBrains Mono',monospace"}}>
+                        <div style={{fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:2}}>VARIACIÓN GRASA</div>
+                        <div style={{fontSize:14,fontWeight:700,color:plateauData.fRange<0.6?"#ffb830":"#3ddc84"}}>Δ {plateauData.fRange}%</div>
+                      </div>
+                    )}
+                    <div style={{background:"#0c0c0f",borderRadius:3,padding:"7px 12px",fontFamily:"'JetBrains Mono',monospace"}}>
+                      <div style={{fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:2}}>ADHERENCIA 14D</div>
+                      <div style={{fontSize:14,fontWeight:700,color:plateauData.adherencia>=70?"#3ddc84":plateauData.adherencia>=50?"#ffb830":"#ff7a4d"}}>
+                        {plateauData.adherencia>0?`${plateauData.adherencia}%`:"Sin datos"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advice box */}
+                  <div style={{background:plateauData.isWeightPlateau?"rgba(255,122,77,.06)":"rgba(61,220,132,.06)",
+                    border:`1px solid ${plateauData.isWeightPlateau?"rgba(255,122,77,.2)":"rgba(61,220,132,.2)"}`,
+                    borderRadius:3,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+                      color:plateauData.isWeightPlateau?"#ff7a4d":"#3ddc84",letterSpacing:".1em",marginBottom:4}}>
+                      {plateauData.isWeightPlateau?"💡 ACCIONES SUGERIDAS":"✓ CONTINÚA CON EL PROTOCOLO"}
+                    </div>
+                    <div style={{fontSize:12,color:"#8888a8",lineHeight:1.6}}>{plateauData.advice}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Macro targets ── */}
             <div className="sec-h">Metas de Macros — {isTrainingDay?"Día de Entreno":"Día de Descanso"}</div>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Plan de referencia, metas de macros por tipo de día y suplementación.</p>
