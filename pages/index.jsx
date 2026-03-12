@@ -1125,12 +1125,22 @@ function AppInner() {
     }
   };
 
-  // Auto-analyze day insight when switching to a date that has entries but no insight yet
+  // Auto-analyze day insight — load from localStorage cache first, call API only if missing
   useEffect(() => {
     const entries = log[selDate] || [];
-    if (entries.length > 0 && !dayInsight[selDate] && tab === "hoy" && loaded) {
-      analyzeDayInsight(selDate, entries);
-    }
+    if (entries.length === 0 || tab !== "hoy" || !loaded) return;
+    if (dayInsight[selDate]) return; // already in state
+    // Try localStorage cache first
+    try {
+      const cached = localStorage.getItem('insight:' + selDate);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setDayInsight(prev => ({...prev, [selDate]: parsed}));
+        return; // served from cache, no API call
+      }
+    } catch(_) {}
+    // Nothing cached → call API
+    analyzeDayInsight(selDate, entries);
   }, [selDate, tab, loaded]);
 
   if (authLoading) return null;
@@ -1526,6 +1536,7 @@ Analiza este día y responde SOLO JSON sin backticks:
       const rawText = data.content.map(b=>b.text||"").join("");
       const parsed = extractJSON(rawText);
       setDayInsight(prev=>({...prev,[dateKey]:parsed}));
+      try { localStorage.setItem('insight:'+dateKey, JSON.stringify(parsed)); } catch(_) {}
     } catch(e) {
       setDayInsight(prev=>({...prev,[dateKey]:{status:"amarillo",titulo:"Error al analizar",resumen:"No se pudo generar el análisis. Intenta de nuevo.",tip:""}}));
     }
@@ -3937,8 +3948,18 @@ Analiza este día y responde SOLO JSON sin backticks:
               const angleRad = angleDeg * Math.PI / 180;
               const nx = cx + (R-10)*Math.cos(angleRad);
               const ny = cy - (R-10)*Math.sin(angleRad);
-              const negItems = ["Falta de sueño","Azúcares / ultraprocesados","Estrés crónico","Sedentarismo"];
-              const posItems = ["Proteína alta","Ejercicio regular","Grasas saludables","Tracking diario"];
+              // Derive real top-3 worst / best from ms.components
+              const negItems = ms ? [...ms.components]
+                .filter(x=>x.status!=="ok")
+                .sort((a,b)=>{const rank={bad:0,warn:1};return (rank[a.status]??2)-(rank[b.status]??2);})
+                .slice(0,3)
+                .map(x=>x.label)
+                : ["Sin datos suficientes"];
+              const posItems = ms ? [...ms.components]
+                .filter(x=>x.status==="ok")
+                .slice(0,3)
+                .map(x=>x.label)
+                : ["Agrega labs e InBody"];
               return (
                 <div style={{marginBottom:28}}>
                   <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:16,textAlign:"center"}}>METABOLIC HEALTH SCORE</div>
@@ -4002,7 +4023,9 @@ Analiza este día y responde SOLO JSON sin backticks:
                   {/* ── Factors row — BELOW the gauge, no overlap ── */}
                   <div style={{display:"flex",justifyContent:"center",gap:16,flexWrap:"wrap",marginBottom:4}}>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>Factores ⬇</div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#ff6b6b44",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>
+                        {ms ? "⚠ Área de mejora" : "Factores ⬇"}
+                      </div>
                       {negItems.map(t=>(
                         <div key={t} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:"11px",color:"#ff8060",marginBottom:3,display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
                           <span>{t}</span><span style={{width:6,height:6,borderRadius:"50%",background:"#ff6b6b",display:"inline-block",flexShrink:0}}/>
@@ -4010,7 +4033,9 @@ Analiza este día y responde SOLO JSON sin backticks:
                       ))}
                     </div>
                     <div style={{textAlign:"left"}}>
-                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>Factores ⬆</div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#3ddc8444",letterSpacing:".08em",marginBottom:5,textTransform:"uppercase"}}>
+                        {ms ? "✓ Indicadores ok" : "Factores ⬆"}
+                      </div>
                       {posItems.map(t=>(
                         <div key={t} style={{fontFamily:"'Instrument Sans',sans-serif",fontSize:"11px",color:"#3ddc84",marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
                           <span style={{width:6,height:6,borderRadius:"50%",background:"#3ddc84",display:"inline-block",flexShrink:0}}/><span>{t}</span>
