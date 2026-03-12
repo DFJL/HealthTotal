@@ -4345,7 +4345,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             <div>
               <div className="sec-h">Metabolic Timeline</div>
               <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
-                Solo eventos con cambios relevantes: Δ≥{W_THR}kg peso · Δ≥{M_THR}kg músculo · Δ≥{F_THR}% grasa (acumulado vs último hito). Todos los labs.
+                Solo eventos con cambios relevantes: ≥{(W_PCT*100).toFixed(0)}% peso · ≥{(M_PCT*100).toFixed(0)}% músculo · ≥{F_ABS}pp grasa (acumulado vs último hito por fuente). Todos los labs.
               </p>
 
               {/* Summary pills */}
