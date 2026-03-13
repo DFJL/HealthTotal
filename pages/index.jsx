@@ -1901,7 +1901,7 @@ Analiza este día y responde SOLO JSON sin backticks:
   const latestLab = labResults[labResults.length-1];
   const MODULES = [
     {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
-    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","MEDICIONES"],["labs","LABS"],["score","SCORE"],["timeline","TIMELINE"]]},
+    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","MEDICIONES"],["labs","LABS"],["score","SCORE"],["proyecciones","PROYECCIONES"],["timeline","TIMELINE"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
     {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
   ];
@@ -4946,230 +4946,6 @@ ${PLAN_MEALS.map(m=>`
               })()}
             </div>
 
-            {/* ── Forecasting Predictivo ── */}
-            {(()=>{
-              // ── Linear regression helper ──
-              function linReg(points) {
-                // points: [{x: days_from_epoch, y: value}]
-                if (points.length < 2) return null;
-                const n = points.length;
-                const sumX  = points.reduce((s,p)=>s+p.x, 0);
-                const sumY  = points.reduce((s,p)=>s+p.y, 0);
-                const sumXY = points.reduce((s,p)=>s+p.x*p.y, 0);
-                const sumX2 = points.reduce((s,p)=>s+p.x*p.x, 0);
-                const denom = n*sumX2 - sumX*sumX;
-                if (!denom) return null;
-                const slope = (n*sumXY - sumX*sumY) / denom; // units per day
-                const intercept = (sumY - slope*sumX) / n;
-                return { slope, intercept };
-              }
-              function project(reg, daysAhead) {
-                if (!reg) return null;
-                const nowDays = Date.now() / 86400000;
-                return reg.intercept + reg.slope * (nowDays + daysAhead);
-              }
-              function toDays(dateStr) {
-                // accepts YYYY-MM or YYYY-MM-DD
-                return new Date(dateStr.length===7 ? dateStr+"-15" : dateStr).getTime() / 86400000;
-              }
-
-              // ── Build series ──
-              const bodyPts_w = allInbody.filter(r=>r.w).map(r=>({x:toDays(r.d), y:r.w}));
-              const bodyPts_f = allInbody.filter(r=>r.f).map(r=>({x:toDays(r.d), y:r.f}));
-              const bodyPts_m = allInbody.filter(r=>r.m).map(r=>({x:toDays(r.d), y:r.m}));
-
-              const HORIZONS = [{label:"3M", days:90}, {label:"6M", days:180}, {label:"12M", days:365}];
-
-              // ── Lab field catalogue — covers all fields the app can store ──
-              const LAB_META = {
-                ldl:        { label:"LDL",             unit:"mg/dL", lbetter:true,  ref:100,   decimals:0 },
-                hdl:        { label:"HDL",             unit:"mg/dL", lbetter:false, ref:60,    decimals:0 },
-                tc:         { label:"Col. Total",      unit:"mg/dL", lbetter:true,  ref:200,   decimals:0 },
-                tg:         { label:"Triglicéridos",   unit:"mg/dL", lbetter:true,  ref:150,   decimals:0 },
-                hba1c:      { label:"HbA1c",           unit:"%",     lbetter:true,  ref:5.7,   decimals:2 },
-                glucose:    { label:"Glucosa",         unit:"mg/dL", lbetter:true,  ref:100,   decimals:0 },
-                insulin:    { label:"Insulina",        unit:"µU/mL", lbetter:true,  ref:10,    decimals:1 },
-                uric_acid:  { label:"Ácido Úrico",     unit:"mg/dL", lbetter:true,  ref:6.0,   decimals:1 },
-                creatinine: { label:"Creatinina",      unit:"mg/dL", lbetter:true,  ref:1.1,   decimals:2 },
-                ggt:        { label:"GGT",             unit:"U/L",   lbetter:true,  ref:50,    decimals:0 },
-                psa:        { label:"PSA",             unit:"ng/mL", lbetter:true,  ref:4.0,   decimals:2 },
-                hemoglobin: { label:"Hemoglobina",     unit:"g/dL",  lbetter:false, ref:14,    decimals:1 },
-                leucocitos: { label:"Leucocitos",      unit:"×10³",  lbetter:true,  ref:10,    decimals:1 },
-                vcm:        { label:"VCM",             unit:"fL",    lbetter:null,  ref:null,  decimals:1 },
-                hcm:        { label:"HCM",             unit:"pg",    lbetter:null,  ref:null,  decimals:1 },
-                urea:       { label:"Urea",            unit:"mg/dL", lbetter:true,  ref:45,    decimals:0 },
-              };
-
-              // ── Auto-discover lab fields with ≥2 data points ──
-              const labIndicators = Object.entries(LAB_META)
-                .map(([key, meta]) => {
-                  const pts = labResults
-                    .filter(r => r[key] != null && !isNaN(Number(r[key])))
-                    .map(r => ({ x: toDays(r.date), y: Number(r[key]) }))
-                    .sort((a,b) => a.x - b.x);
-                  if (pts.length < 2) return null;
-                  return {
-                    key, ...meta, pts,
-                    good: meta.lbetter===true  ? "↓ Mejorando" : meta.lbetter===false ? "↑ Mejorando" : "→ Estable",
-                    bad:  meta.lbetter===true  ? "↑ Empeorando": meta.lbetter===false ? "↓ Empeorando": "→ Variable",
-                  };
-                })
-                .filter(Boolean);
-
-              const INDICATORS = [
-                { key:"peso",    label:"Peso",          unit:"kg", pts:bodyPts_w, lbetter:true,  ref:null, decimals:1, good:"↓ Reduciendo", bad:"↑ Aumentando" },
-                { key:"grasa",   label:"% Grasa",       unit:"%",  pts:bodyPts_f, lbetter:true,  ref:20,   decimals:1, good:"↓ Perdiendo",  bad:"↑ Acumulando" },
-                { key:"musculo", label:"Masa muscular", unit:"kg", pts:bodyPts_m, lbetter:false, ref:null, decimals:1, good:"↑ Ganando",    bad:"↓ Perdiendo" },
-                ...labIndicators,
-              ].filter(ind => ind.pts.length >= 2);
-
-              if (!INDICATORS.length) return null;
-
-              return (
-                <div style={{marginBottom:24}}>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:12}}>
-                    FORECASTING PREDICTIVO — SI MANTIENES ESTOS HÁBITOS
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {INDICATORS.map(ind=>{
-                      const reg = linReg(ind.pts);
-                      if (!reg) return null;
-                      const nowDays = Date.now()/86400000;
-                      const currentVal = reg.intercept + reg.slope*nowDays;
-                      const projections = HORIZONS.map(h=>({
-                        ...h,
-                        val: project(reg, h.days),
-                      }));
-                      // slope per month
-                      const slopePerMonth = reg.slope * 30;
-                      const improving = ind.lbetter ? slopePerMonth < -0.01 : slopePerMonth > 0.01;
-                      const worsening = ind.lbetter ? slopePerMonth > 0.01  : slopePerMonth < -0.01;
-                      const trendCol  = improving ? "#3ddc84" : worsening ? "#ff4d4d" : "#ffb830";
-                      const trendIcon = improving ? "↘" : worsening ? "↗" : "→";
-                      const trendText = improving ? ind.good : worsening ? ind.bad : "→ Estable";
-
-                      // Mini sparkline — last N real points + 12m projection
-                      const spark = ind.pts.slice(-6);
-                      const proj12 = project(reg, 365);
-                      const allY = [...spark.map(p=>p.y), proj12].filter(Boolean);
-                      const minY = Math.min(...allY)*0.97, maxY = Math.max(...allY)*1.03;
-                      const rangeY = maxY-minY || 1;
-                      const SW=200, SH=36, PAD=4;
-                      const plotW=SW-PAD*2, plotH=SH-PAD*2;
-                      // x range: first real point to +12m
-                      const xMin=spark[0].x, xMax=nowDays+365;
-                      const xRange=xMax-xMin||1;
-                      const toSX=x=>PAD+((x-xMin)/xRange)*plotW;
-                      const toSY=y=>PAD+plotH-((y-minY)/rangeY)*plotH;
-                      const realPts=spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`).join(" ");
-                      // trend line: from first real to 12m ahead
-                      const tx0=toSX(spark[0].x), ty0=toSY(reg.intercept+reg.slope*spark[0].x);
-                      const tx1=toSX(nowDays+365), ty1=toSY(proj12);
-                      // ref line
-                      const refY = ind.ref ? toSY(ind.ref) : null;
-
-                      return (
-                        <div key={ind.key} style={{
-                          background:"#0f0f16",
-                          border:`1px solid ${trendCol}22`,
-                          borderLeft:`3px solid ${trendCol}`,
-                          borderRadius:"0 4px 4px 0",
-                          padding:"14px 16px",
-                        }}>
-                          <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
-
-                            {/* Left: label + trend */}
-                            <div style={{flex:"0 0 130px"}}>
-                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>{ind.label}</div>
-                              <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:4}}>
-                                <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:trendCol,lineHeight:1}}>
-                                  {currentVal.toFixed(ind.decimals)}
-                                </span>
-                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{ind.unit}</span>
-                              </div>
-                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:trendCol}}>
-                                {trendIcon} {trendText}
-                              </div>
-                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>
-                                {(slopePerMonth>0?"+":"")+slopePerMonth.toFixed(ind.decimals+1)}{ind.unit}/mes · {ind.pts.length} mediciones
-                              </div>
-                            </div>
-
-                            {/* Center: sparkline */}
-                            <div style={{flex:"0 0 200px"}}>
-                              <svg viewBox={`0 0 ${SW} ${SH}`} style={{width:"100%",maxWidth:200,height:SH*1.8,display:"block"}}>
-                                {/* Ref line */}
-                                {refY!==null && refY>=PAD && refY<=SH-PAD && (
-                                  <line x1={PAD} y1={refY} x2={SW-PAD} y2={refY}
-                                    stroke="#44445a" strokeWidth="0.5" strokeDasharray="2,2"/>
-                                )}
-                                {/* Trend line (full projection) */}
-                                <line x1={tx0} y1={ty0} x2={tx1} y2={ty1}
-                                  stroke={trendCol} strokeWidth="1" strokeDasharray="3,2" opacity="0.5"/>
-                                {/* Area under real line */}
-                                <polyline
-                                  points={[...spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`),
-                                    `${toSX(spark[spark.length-1].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`,
-                                    `${toSX(spark[0].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`].join(" ")}
-                                  fill={trendCol+"12"} stroke="none"/>
-                                {/* Real data line */}
-                                <polyline points={realPts} fill="none" stroke={trendCol} strokeWidth="2"
-                                  strokeLinejoin="round" strokeLinecap="round"/>
-                                {/* Dots */}
-                                {spark.map((p,i)=>(
-                                  <circle key={i} cx={toSX(p.x)} cy={toSY(p.y)} r="2.5"
-                                    fill={trendCol} stroke="#0c0c0f" strokeWidth="1"/>
-                                ))}
-                                {/* NOW vertical marker */}
-                                <line x1={toSX(nowDays)} y1={PAD} x2={toSX(nowDays)} y2={PAD+plotH}
-                                  stroke="#2a2a38" strokeWidth="1"/>
-                              </svg>
-                              <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:"#44445a",marginTop:1}}>
-                                <span>{spark[0] ? new Date(spark[0].x*86400000).toLocaleDateString("es",{month:"short",year:"2-digit"}) : ""}</span>
-                                <span style={{color:"#2a2a38"}}>hoy</span>
-                                <span>+12m</span>
-                              </div>
-                            </div>
-
-                            {/* Right: projections */}
-                            <div style={{flex:1,minWidth:120}}>
-                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>PROYECCIÓN</div>
-                              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                                {projections.map(p=>{
-                                  const pVal = p.val;
-                                  const delta = pVal - currentVal;
-                                  const dCol = (ind.lbetter ? delta<0 : delta>0) ? "#3ddc84" : Math.abs(delta)<0.5 ? "#ffb830" : "#ff4d4d";
-                                  const atRef = ind.ref && (ind.lbetter ? pVal<=ind.ref : pVal>=ind.ref);
-                                  return (
-                                    <div key={p.label} style={{
-                                      background:atRef?dCol+"18":"#131318",
-                                      border:`1px solid ${dCol}33`,
-                                      borderRadius:3,padding:"6px 10px",textAlign:"center",
-                                    }}>
-                                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginBottom:2}}>{p.label}</div>
-                                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:dCol}}>
-                                        {pVal.toFixed(ind.decimals)}
-                                      </div>
-                                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:dCol,marginTop:1}}>
-                                        {(delta>0?"+":"")+delta.toFixed(ind.decimals)}
-                                      </div>
-                                      {atRef && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:dCol,marginTop:2}}>✓ META</div>}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#2a2a38",marginTop:8}}>
-                    Proyección lineal basada en tendencia histórica. Asume continuidad de hábitos actuales.
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* ── Wearables coming soon ── */}
             <div style={{background:"rgba(168,255,62,.03)",border:"1px dashed rgba(168,255,62,.15)",borderRadius:4,padding:"16px",marginBottom:24}}>
@@ -5205,6 +4981,257 @@ ${PLAN_MEALS.map(m=>`
           );
         })()}
 
+
+        {tab==="proyecciones" && (()=>{
+          // ══ PROYECCIONES — fused Trayectoria + Forecasting ══
+          function linRegP(points) {
+            if (points.length < 2) return null;
+            const n=points.length;
+            const sumX=points.reduce((s,p)=>s+p.x,0), sumY=points.reduce((s,p)=>s+p.y,0);
+            const sumXY=points.reduce((s,p)=>s+p.x*p.y,0), sumX2=points.reduce((s,p)=>s+p.x*p.x,0);
+            const den=n*sumX2-sumX*sumX;
+            if(!den) return null;
+            const slope=(n*sumXY-sumX*sumY)/den;
+            const intercept=(sumY-slope*sumX)/n;
+            return {slope,intercept};
+          }
+          function toDaysP(dateStr){
+            return new Date(dateStr.length===7?dateStr+"-15":dateStr).getTime()/86400000;
+          }
+          const nowDaysP = Date.now()/86400000;
+
+          const LAB_META_P = {
+            ldl:       {label:"LDL",           unit:"mg/dL", lbetter:true,  ref:100,  dec:0, icon:"🩸"},
+            hdl:       {label:"HDL",           unit:"mg/dL", lbetter:false, ref:60,   dec:0, icon:"🛡"},
+            tc:        {label:"Col. Total",    unit:"mg/dL", lbetter:true,  ref:200,  dec:0, icon:"💉"},
+            tg:        {label:"Triglicéridos", unit:"mg/dL", lbetter:true,  ref:150,  dec:0, icon:"📉"},
+            hba1c:     {label:"HbA1c",         unit:"%",     lbetter:true,  ref:5.7,  dec:2, icon:"🍬"},
+            glucose:   {label:"Glucosa",       unit:"mg/dL", lbetter:true,  ref:100,  dec:0, icon:"📊"},
+            insulin:   {label:"Insulina",      unit:"µU/mL", lbetter:true,  ref:10,   dec:1, icon:"💊"},
+            uric_acid: {label:"Ácido Úrico",   unit:"mg/dL", lbetter:true,  ref:6.0,  dec:1, icon:"⚗"},
+            creatinine:{label:"Creatinina",    unit:"mg/dL", lbetter:true,  ref:1.1,  dec:2, icon:"🔬"},
+            ggt:       {label:"GGT",           unit:"U/L",   lbetter:true,  ref:50,   dec:0, icon:"🫀"},
+            psa:       {label:"PSA",           unit:"ng/mL", lbetter:true,  ref:4.0,  dec:2, icon:"🔵"},
+            hemoglobin:{label:"Hemoglobina",   unit:"g/dL",  lbetter:false, ref:14,   dec:1, icon:"🩺"},
+            urea:      {label:"Urea",          unit:"mg/dL", lbetter:true,  ref:45,   dec:0, icon:"💧"},
+          };
+
+          // Body series
+          const INDICATORS_P = [
+            {key:"peso",    label:"Peso",          unit:"kg", icon:"⚖", lbetter:true,  ref:null, dec:1,
+              pts: allInbody.filter(r=>r.w).map(r=>({x:toDaysP(r.d),y:r.w}))},
+            {key:"grasa",   label:"% Grasa",       unit:"%",  icon:"🔥", lbetter:true,  ref:18,   dec:1,
+              pts: allInbody.filter(r=>r.f).map(r=>({x:toDaysP(r.d),y:r.f}))},
+            {key:"musculo", label:"Masa muscular", unit:"kg", icon:"💪", lbetter:false, ref:null, dec:1,
+              pts: allInbody.filter(r=>r.m&&r.m>0).map(r=>({x:toDaysP(r.d),y:r.m}))},
+            // Dynamic labs
+            ...Object.entries(LAB_META_P).map(([key,meta])=>{
+              const pts=labResults.filter(r=>r[key]!=null&&!isNaN(Number(r[key])))
+                .map(r=>({x:toDaysP(r.date),y:Number(r[key])}))
+                .sort((a,b)=>a.x-b.x);
+              return pts.length>=2 ? {key,...meta,pts} : null;
+            }).filter(Boolean),
+          ].filter(ind=>ind.pts.length>=2);
+
+          if (!INDICATORS_P.length) return (
+            <div className="fade-in" style={{padding:"28px 24px",maxWidth:700,margin:"0 auto"}}>
+              <div className="sec-h">Proyecciones</div>
+              <div className="card" style={{textAlign:"center",padding:"40px 0",color:"#44445a"}}>
+                <div style={{fontSize:40,marginBottom:12}}>📈</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:16,marginBottom:8}}>Sin datos suficientes</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",lineHeight:1.7}}>
+                  Necesitas al menos 2 mediciones de InBody/Renpho<br/>o 2 resultados de labs para calcular proyecciones.
+                </div>
+              </div>
+            </div>
+          );
+
+          const HORIZONS_P = [{label:"3M",days:90},{label:"6M",days:180},{label:"12M",days:365}];
+
+          // Summary stats
+          const regs = INDICATORS_P.map(ind=>({ind, reg:linRegP(ind.pts)}));
+          const improving = regs.filter(({ind,reg})=>{
+            if(!reg) return false;
+            const s=reg.slope*30;
+            return ind.lbetter ? s<-0.01 : s>0.01;
+          }).length;
+          const worsening = regs.filter(({ind,reg})=>{
+            if(!reg) return false;
+            const s=reg.slope*30;
+            return ind.lbetter ? s>0.01 : s<-0.01;
+          }).length;
+          const stable = INDICATORS_P.length - improving - worsening;
+          const oCol = improving>worsening?"#3ddc84":worsening>improving?"#ff4d4d":"#ffb830";
+          const oLabel = improving>worsening?"↗ MEJORANDO":worsening>improving?"↘ DETERIORANDO":"→ ESTABLE";
+
+          return (
+            <div className="fade-in" style={{padding:"28px 24px",maxWidth:700,margin:"0 auto"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:14}}>PROYECCIONES — BASADAS EN TENDENCIA HISTÓRICA</div>
+
+              {/* ── Summary header ── */}
+              <div style={{background:"#0f0f16",border:`1px solid ${oCol}22`,borderLeft:`3px solid ${oCol}`,borderRadius:"0 4px 4px 0",padding:"14px 18px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+                <div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:oCol,letterSpacing:".15em",marginBottom:4}}>DIRECCIÓN GENERAL</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:oCol}}>{oLabel}</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>
+                    {INDICATORS_P.length} indicadores · si mantienes hábitos actuales
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  {[{n:improving,l:"MEJOR",c:"#3ddc84"},{n:stable,l:"ESTABLE",c:"#8888a8"},{n:worsening,l:"PEOR",c:"#ff4d4d"}].map(x=>(
+                    <div key={x.l} style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center",minWidth:48}}>
+                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:x.c,lineHeight:1}}>{x.n}</div>
+                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>{x.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Per-indicator cards ── */}
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {regs.map(({ind,reg})=>{
+                  if(!reg) return null;
+                  const slopePerMonth = reg.slope*30;
+                  const improving_i = ind.lbetter ? slopePerMonth<-0.01 : slopePerMonth>0.01;
+                  const worsening_i = ind.lbetter ? slopePerMonth>0.01  : slopePerMonth<-0.01;
+                  const tCol = improving_i?"#3ddc84":worsening_i?"#ff4d4d":"#ffb830";
+                  const tIcon = improving_i?"↘":worsening_i?"↗":"→";
+                  const tText = improving_i?(ind.lbetter?"↓ Mejorando":"↑ Mejorando"):worsening_i?(ind.lbetter?"↑ Empeorando":"↓ Empeorando"):"→ Estable";
+                  const curVal = reg.intercept + reg.slope*nowDaysP;
+                  const projections = HORIZONS_P.map(h=>({
+                    ...h, val: reg.intercept+reg.slope*(nowDaysP+h.days)
+                  }));
+
+                  // Sparkline: real points + projected zone
+                  const spark = ind.pts.slice(-8);
+                  const proj12val = reg.intercept+reg.slope*(nowDaysP+365);
+                  const allY=[...spark.map(p=>p.y),proj12val].filter(v=>v!=null&&!isNaN(v));
+                  const minY=Math.min(...allY)*0.97, maxY=Math.max(...allY)*1.03;
+                  const rangeY=maxY-minY||1;
+                  const SW=240,SH=52,PAD=8;
+                  const plotW=SW-PAD*2, plotH=SH-PAD*2;
+                  const xMin=spark[0].x, xMax=nowDaysP+365, xRange=xMax-xMin||1;
+                  const toSX=x=>PAD+((x-xMin)/xRange)*plotW;
+                  const toSY=y=>PAD+plotH-((y-minY)/rangeY)*plotH;
+                  const nowX=toSX(nowDaysP);
+                  // Trend line: across full range
+                  const tlx0=PAD, tly0=toSY(reg.intercept+reg.slope*xMin);
+                  const tlx1=SW-PAD, tly1=toSY(reg.intercept+reg.slope*xMax);
+                  // Real points
+                  const realPolyline=spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`).join(" ");
+                  // Reference line
+                  const refSY = ind.ref ? toSY(ind.ref) : null;
+
+                  return (
+                    <div key={ind.key} style={{
+                      background:"#0f0f16",
+                      border:`1px solid ${tCol}22`,
+                      borderLeft:`3px solid ${tCol}`,
+                      borderRadius:"0 4px 4px 0",
+                      padding:"14px 16px",
+                    }}>
+                      <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+
+                        {/* Label + current + trend */}
+                        <div style={{flex:"0 0 130px"}}>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>
+                            {ind.icon} {ind.label.toUpperCase()}
+                          </div>
+                          <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:4}}>
+                            <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:24,color:tCol,lineHeight:1}}>
+                              {curVal.toFixed(ind.dec)}
+                            </span>
+                            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{ind.unit}</span>
+                          </div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:tCol}}>
+                            {tIcon} {tText}
+                          </div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>
+                            {(slopePerMonth>=0?"+":"")+slopePerMonth.toFixed(ind.dec+1)}{ind.unit}/mes · {ind.pts.length} pts
+                          </div>
+                        </div>
+
+                        {/* Sparkline: past + future on same axis */}
+                        <div style={{flex:"0 0 240px"}}>
+                          <svg viewBox={`0 0 ${SW} ${SH}`} style={{width:"100%",maxWidth:240,height:SH*1.8,display:"block"}}>
+                            {/* Future zone */}
+                            <rect x={nowX} y={PAD} width={SW-PAD-nowX} height={plotH}
+                              fill={tCol+"08"} rx="0"/>
+                            {/* Ref line */}
+                            {refSY!==null&&refSY>=PAD&&refSY<=SH-PAD&&(
+                              <line x1={PAD} y1={refSY} x2={SW-PAD} y2={refSY}
+                                stroke="#44445a" strokeWidth="0.5" strokeDasharray="2,2"/>
+                            )}
+                            {/* Trend line (full — past faint, future clear) */}
+                            <line x1={tlx0} y1={tly0} x2={nowX} y2={toSY(reg.intercept+reg.slope*nowDaysP)}
+                              stroke={tCol} strokeWidth="0.8" strokeDasharray="2,2" opacity="0.3"/>
+                            <line x1={nowX} y1={toSY(reg.intercept+reg.slope*nowDaysP)} x2={tlx1} y2={tly1}
+                              stroke={tCol} strokeWidth="1.5" strokeDasharray="4,2" opacity="0.7"/>
+                            {/* Area under real */}
+                            {spark.length>1&&(
+                              <polyline
+                                points={[...spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`),
+                                  `${toSX(spark[spark.length-1].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`,
+                                  `${toSX(spark[0].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`].join(" ")}
+                                fill={tCol+"15"} stroke="none"/>
+                            )}
+                            {/* Real data line */}
+                            <polyline points={realPolyline} fill="none" stroke={tCol}
+                              strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+                            {/* Real dots */}
+                            {spark.map((p,i)=>(
+                              <circle key={i} cx={toSX(p.x)} cy={toSY(p.y)} r={i===spark.length-1?3.5:2}
+                                fill={tCol} stroke="#0c0c0f" strokeWidth="1"/>
+                            ))}
+                            {/* NOW divider */}
+                            <line x1={nowX} y1={PAD} x2={nowX} y2={SH-PAD}
+                              stroke="#2a2a38" strokeWidth="1"/>
+                          </svg>
+                          {/* X axis labels */}
+                          <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:"#44445a",marginTop:1,paddingLeft:PAD,paddingRight:PAD}}>
+                            <span>{spark[0]?new Date(spark[0].x*86400000).toLocaleDateString("es",{month:"short",year:"2-digit"}):""}  </span>
+                            <span style={{color:"#2a2a38"}}>HOY</span>
+                            <span>+12M</span>
+                          </div>
+                        </div>
+
+                        {/* Projections 3M/6M/12M */}
+                        <div style={{flex:1,minWidth:110}}>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>PROYECCIÓN</div>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            {projections.map(p=>{
+                              const delta=p.val-curVal;
+                              const dCol=(ind.lbetter?delta<0:delta>0)?"#3ddc84":Math.abs(delta)<0.3?"#ffb830":"#ff4d4d";
+                              const atRef=ind.ref&&(ind.lbetter?p.val<=ind.ref:p.val>=ind.ref);
+                              return (
+                                <div key={p.label} style={{
+                                  background:atRef?dCol+"18":"#131318",
+                                  border:`1px solid ${dCol}33`,
+                                  borderRadius:3,padding:"7px 10px",textAlign:"center",minWidth:48,
+                                }}>
+                                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginBottom:2}}>{p.label}</div>
+                                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:dCol,lineHeight:1}}>{p.val.toFixed(ind.dec)}</div>
+                                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:dCol,marginTop:1}}>
+                                    {(delta>=0?"+":"")+delta.toFixed(ind.dec)}
+                                  </div>
+                                  {atRef&&<div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:dCol,marginTop:2}}>✓ META</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#2a2a38",marginTop:12}}>
+                Regresión lineal sobre datos históricos. Zona sombreada = futuro proyectado. Asume continuidad de hábitos actuales.
+              </div>
+            </div>
+          );
+        })()}
 
         {tab==="timeline" && (()=>{
           const today = todayStr();
@@ -5432,228 +5459,16 @@ ${PLAN_MEALS.map(m=>`
                 );
               })()}
 
-                            {/* ══ HEALTH TRAJECTORY (moved from SCORE) ══ */}
-              {(()=>{
-              if (allInbody.length < 2 && labResults.length < 2) return (
-                <div>
-                  <div className="sec-h">Trayectoria de Salud</div>
-                  <div className="card" style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",letterSpacing:".1em"}}>SE NECESITAN AL MENOS 2 MEDICIONES</div>
-                    <div style={{fontSize:11,marginTop:6}}>Agrega más datos de InBody/Renpho o Labs para calcular tu trayectoria.</div>
-                  </div>
-                </div>
-              );
-              const slope = (vals) => {
-                const pts = vals.filter(v=>v!=null&&!isNaN(v));
-                if (pts.length<2) return null;
-                const n=pts.length, sx=pts.reduce((s,_,i)=>s+i,0), sy=pts.reduce((s,v)=>s+v,0);
-                const sxy=pts.reduce((s,v,i)=>s+i*v,0), sx2=pts.reduce((s,_,i)=>s+i*i,0);
-                return (n*sxy-sx*sy)/(n*sx2-sx*sx);
-              };
-              const dir = (s, higherIsBetter=false) => {
-                if (s===null) return {icon:"—",label:"Sin datos",color:"#44445a"};
-                if (Math.abs(s) < 0.05) return {icon:"→",label:"Estable",color:"#8888a8"};
-                return (higherIsBetter ? s>0 : s<0)
-                  ? {icon:"⬆",label:"Mejorando",color:"#3ddc84"}
-                  : {icon:"⬇",label:"Deteriorando",color:"#ff4d4d"};
-              };
-              const ibW=allInbody.map(x=>x.w), ibM=allInbody.map(x=>x.m), ibF=allInbody.map(x=>x.f), ibVi=allInbody.map(x=>x.vi);
-              const lastIB=allInbody[allInbody.length-1];
-              const labsSorted=[...labResults].sort((a,b)=>a.date.localeCompare(b.date));
-              const lastLab=labsSorted[labsSorted.length-1];
-              const tgHdlSeries=labsSorted.map(x=>(x.tg&&x.hdl)?parseFloat((x.tg/x.hdl).toFixed(2)):null).filter(v=>v);
-              const trajectories=[
-                {label:"Peso",          unit:"kg",     cur:lastIB?.w,       slope:slope(ibW),                                      higher:false, icon:"⚖️"},
-                {label:"Masa muscular", unit:"kg",     cur:lastIB?.m,       slope:slope(ibM),                                      higher:true,  icon:"💪"},
-                {label:"% Grasa",       unit:"%",      cur:lastIB?.f,       slope:slope(ibF),                                      higher:false, icon:"🔥"},
-                {label:"Grasa visceral",unit:"lvl",    cur:lastIB?.vi,      slope:slope(ibVi),                                     higher:false, icon:"🫀"},
-                {label:"LDL",           unit:"mg/dL",  cur:lastLab?.ldl,    slope:slope(labsSorted.map(x=>x.ldl)),                 higher:false, icon:"🩸"},
-                {label:"HDL",           unit:"mg/dL",  cur:lastLab?.hdl,    slope:slope(labsSorted.map(x=>x.hdl)),                 higher:true,  icon:"🛡"},
-                {label:"HbA1c",         unit:"%",      cur:lastLab?.hba1c,  slope:slope(labsSorted.map(x=>x.hba1c)),               higher:false, icon:"🍬"},
-                {label:"TG/HDL",        unit:"",       cur:tgHdlSeries.slice(-1)[0], slope:slope(tgHdlSeries),                    higher:false, icon:"📉"},
-              ].filter(t=>t.cur!=null && t.slope!==null);
-              if (trajectories.length===0) return null;
-              const improving=trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬆").length;
-              const deteriorating=trajectories.filter(t=>dir(t.slope,t.higher).icon==="⬇").length;
-              const oColor=improving>deteriorating?"#3ddc84":deteriorating>improving?"#ff4d4d":"#ffb830";
-              const oLabel=improving>deteriorating?"↗ MEJORANDO":deteriorating>improving?"↘ DETERIORANDO":"→ ESTABLE";
-              const project=(cur,s)=>cur&&s!==null?parseFloat((cur+s*6).toFixed(1)):null;
-              return (
-                <div>
-                  <div className="sec-h" style={{marginTop:28}}>Trayectoria de Salud</div>
-                  <div className="card" style={{marginBottom:14,borderLeft:`3px solid ${oColor}`,borderRadius:"0 4px 4px 0",background:`rgba(${oColor==="#3ddc84"?"61,220,132":oColor==="#ff4d4d"?"255,77,77":"255,184,48"},.04)`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                      <div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:oColor,letterSpacing:".15em",marginBottom:4}}>DIRECCIÓN GENERAL</div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:20,color:oColor}}>{oLabel}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginTop:4}}>
-                          {improving} mejorando · {trajectories.length-improving-deteriorating} estables · {deteriorating} deteriorando
-                        </div>
-                      </div>
-                      <div style={{display:"flex",gap:6}}>
-                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#3ddc84",lineHeight:1}}>{improving}</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>MEJOR</div>
-                        </div>
-                        <div style={{background:"#131318",borderRadius:3,padding:"10px 14px",textAlign:"center"}}>
-                          <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:28,color:"#ff4d4d",lineHeight:1}}>{deteriorating}</div>
-                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginTop:2}}>PEOR</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="card" style={{marginBottom:14}}>
-                    <div className="lbl" style={{marginBottom:12}}>Indicadores — proyección a 6 meses</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
-                      {trajectories.map(t=>{
-                        const {icon:dIcon,label:dLabel,color:dColor}=dir(t.slope,t.higher);
-                        const proj=project(t.cur,t.slope);
-                        const projDelta=proj?parseFloat((proj-t.cur).toFixed(1)):null;
-                        return (
-                          <div key={t.label} style={{background:"#131318",borderRadius:4,padding:"10px 12px",borderLeft:`2px solid ${dColor}`}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                              <div>
-                                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".08em"}}>{t.icon} {t.label.toUpperCase()}</div>
-                                <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#e8e8f0",lineHeight:1.2,marginTop:2}}>
-                                  {t.cur}<span style={{fontSize:10,color:"#44445a"}}> {t.unit}</span>
-                                </div>
-                              </div>
-                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:dColor}}>{dIcon}</div>
-                            </div>
-                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:dColor,marginBottom:4}}>{dLabel}</div>
-                            {proj && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
-                              6m: <span style={{color:dColor}}>{proj}{t.unit}</span>
-                              {projDelta!==null && <span style={{marginLeft:4}}>({projDelta>0?"+":""}{projDelta})</span>}
-                            </div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:20,lineHeight:1.7}}>
-                    ⚠ Proyecciones lineales sobre datos históricos. Asumen adherencia constante.
-                  </div>
-                </div>
-              );
-            })()}
-
           </div>
           );
         })()}
 
-        {tab==="config" && (
-          <div>
-            <div className="sec-h">Perfil de Usuario</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Este perfil alimenta todos los análisis y rutinas con IA. Mantenlo actualizado.</p>
-            <div className="card" style={{marginBottom:14}}>
-              <ProfileEditor userProfile={userProfile} onSave={saveUserProfile}/>
-            </div>
-
-                        <div className="sec-h">Objetivos Nutricionales</div>
-            <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Ajusta tus objetivos de macros, gestiona favoritos y haz backup de tu data.</p>
-            <div className="card" style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700}}>Macros diarios</span>
-                <button className="btn-sm" onClick={()=>{ setEditTargets(!editTargets); setTmpTargets(targets); }}>
-                  {editTargets?"CANCELAR":"EDITAR"}
-                </button>
-              </div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12,letterSpacing:".08em"}}>
-                {`Calculados para ${userProfile.goals.slice(0,30)}... · ${allInbody[allInbody.length-1]?.w||"—"} kg · TMB ${allInbody[allInbody.length-1] ? Math.round(370+21.6*allInbody[allInbody.length-1].m).toLocaleString() : "—"} kcal`}
-              </div>
-              {MACRO_KEYS.map(k=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <span style={{fontSize:13,color:"#8888a8"}}>{MACRO_CFG[k].label}</span>
-                  {editTargets
-                    ? <input type="number" value={tmpTargets[k]} onChange={e=>setTmpTargets({...tmpTargets,[k]:Number(e.target.value)})} className="inp" style={{width:90,padding:"5px 8px",fontSize:13}}/>
-                    : <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26,color:MACRO_CFG[k].color}}>{targets[k]} <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#8888a8"}}>{MACRO_CFG[k].unit}</span></span>
-                  }
-                </div>
-              ))}
-              {editTargets && (
-                <button className="btn" style={{width:"100%"}} onClick={()=>{ saveTargets(tmpTargets); setEditTargets(false); }}>
-                  ✓ GUARDAR OBJETIVOS
-                </button>
-              )}
-            </div>
-            <div className="sec-h">Alimentos Favoritos</div>
-            <div className="card" style={{marginBottom:14}}>
-              <button className="btn-sm" style={{width:"100%",marginBottom:12}} onClick={()=>setShowFavForm(!showFavForm)}>
-                {showFavForm?"✕ CANCELAR":"+ NUEVO FAVORITO"}
-              </button>
-              {showFavForm && (
-                <div style={{marginBottom:12,padding:"12px",background:"#1a1a22",borderRadius:3}}>
-                  <input placeholder="Nombre del alimento" value={favForm.name}
-                    onChange={e=>setFavForm({...favForm,name:e.target.value})} className="inp" style={{marginBottom:8}}/>
-                  <div className="g2" style={{gap:8}}>
-                    {MACRO_KEYS.map(k=>(
-                      <input key={k} placeholder={`${MACRO_CFG[k].label} (${MACRO_CFG[k].unit})`}
-                        type="number" value={favForm[k]||""} onChange={e=>setFavForm({...favForm,[k]:e.target.value})}
-                        className="inp"/>
-                    ))}
-                  </div>
-                  <button className="btn" style={{width:"100%",marginTop:10}} onClick={()=>{
-                    if(favForm.name) {
-                      const nf2={...favForm,id:Date.now(),calories:Number(favForm.calories),protein:Number(favForm.protein),carbs:Number(favForm.carbs),fats:Number(favForm.fats)}; saveFavs([...favs,nf2],nf2.id);
-                      setFavForm({name:"",calories:0,protein:0,carbs:0,fats:0}); setShowFavForm(false);
-                    }
-                  }}>✓ GUARDAR</button>
-                </div>
-              )}
-              {favs.length===0
-                ? <p style={{fontFamily:"'JetBrains Mono',monospace",color:"#44445a",fontSize:10,textAlign:"center",padding:"12px 0",letterSpacing:".1em"}}>SIN FAVORITOS AÚN</p>
-                : favs.map(f=>(
-                    <div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid rgba(42,42,56,.4)"}}>
-                      <div>
-                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:600,fontSize:13}}>{f.name}</div>
-                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8"}}>{f.calories}kcal · {f.protein}g P · {f.carbs}g C · {f.fats}g F</div>
-                      </div>
-                      <button onClick={()=>{deleteFavorite(f.id).catch(()=>{}); saveFavs(favs.filter(x=>x.id!==f.id));}} style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14}}>🗑</button>
-                    </div>
-                  ))
-              }
-            </div>
-            {/* ── RENPHO CSV IMPORT ── */}
-            <div className="sec-h">Importar Datos Renpho</div>
-            <div className="card" style={{marginBottom:14}}>
-              <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
-                Importa el CSV exportado desde la app Renpho (báscula inteligente). Los datos se agregarán a tu historial de composición corporal en CUERPO.
-              </p>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12,lineHeight:1.8}}>
-                📱 App Renpho → Perfil → Exportar datos → CSV
-              </div>
-              <input ref={renphoRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>handleRenphoFile(e.target.files[0])}/>
-              <button className="btn" style={{width:"100%",background:"rgba(168,255,62,.08)",color:"#a8ff3e",border:"1px solid rgba(168,255,62,.3)"}}
-                onClick={()=>renphoRef.current.click()} disabled={renphoLoading}>
-                {renphoLoading ? <><span>LEYENDO CSV</span><span className="dots"><span/><span/><span/></span></> : "📥 IMPORTAR CSV RENPHO"}
-              </button>
-            </div>
-
-            <div className="sec-h">Backup & Restaurar</div>
-            <div className="card">
-              <p style={{fontSize:12,color:"#8888a8",marginBottom:14,lineHeight:1.6}}>
-                Exporta un backup JSON con todo tu log de comidas, favoritos, objetivos, InBody y labs personalizados. Importa para restaurar entre sesiones.
-              </p>
-              <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(61,220,132,.08)",color:"#3ddc84",border:"1px solid rgba(61,220,132,.3)"}} onClick={exportData}>
-                ⬇ EXPORTAR BACKUP COMPLETO (.JSON)
-              </button>
-              <button className="btn" style={{width:"100%",marginBottom:8,background:"rgba(77,200,255,.08)",color:"#4dc8ff",border:"1px solid rgba(77,200,255,.3)"}} onClick={()=>{setImportText("");setImportJson(true);}}>
-                ⬆ RESTAURAR — PEGAR JSON
-              </button>
-              <button className="btn" style={{width:"100%",background:"rgba(77,200,255,.04)",color:"#44445a",border:"1px solid #1e1e2a",fontSize:10}} onClick={()=>backupRef.current.click()}>
-                ⬆ RESTAURAR — SUBIR ARCHIVO
-              </button>
-            </div>
-          </div>
-        )}
-
-
-      {/* ══ RENPHO PREVIEW MODAL ══ */}
-      {showRenphoModal && renphoPreview && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowRenphoModal(false)}>
-          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:640,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+      {/* ══ RENPHO MODAL ══ */}
+      {showRenphoModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowRenphoModal(false)}>
+          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#a8ff3e"}}>📥 RENPHO — PREVIEW DE IMPORTACIÓN</div>
+              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#e8e8f0"}}>VISTA PREVIA — IMPORTACIÓN</div>
               <button onClick={()=>setShowRenphoModal(false)} style={{background:"none",border:"none",color:"#8888a8",cursor:"pointer",fontSize:18}}>✕</button>
             </div>
             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:12}}>
