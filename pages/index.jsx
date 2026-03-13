@@ -3969,31 +3969,40 @@ ${generatedRoutine.notes?`<div class="footer"><strong>📝 Notas:</strong> ${gen
                   {/* Mini weight chart — last measurements */}
                   {plateauData.recentW.length >= 2 && (()=>{
                     const vals = plateauData.recentW;
-                    const minV = Math.min(...vals) - 0.5;
-                    const maxV = Math.max(...vals) + 0.5;
+                    const PAD_T = 18, PAD_B = 8, PAD_L = 8, PAD_R = 8;
+                    const W = 320, H = 60;
+                    const plotW = W - PAD_L - PAD_R;
+                    const plotH = H - PAD_T - PAD_B;
+                    const minV = Math.min(...vals) - 0.3;
+                    const maxV = Math.max(...vals) + 0.3;
                     const range = maxV - minV || 1;
-                    const W = 300, H = 48;
-                    const pts = vals.map((v,i) => {
-                      const x = vals.length === 1 ? W/2 : (i / (vals.length-1)) * W;
-                      const y = H - ((v - minV) / range) * H;
-                      return `${x},${y}`;
-                    }).join(" ");
+                    const px = (i) => PAD_L + (vals.length === 1 ? plotW/2 : (i / (vals.length-1)) * plotW);
+                    const py = (v) => PAD_T + plotH - ((v - minV) / range) * plotH;
+                    const pts = vals.map((v,i) => `${px(i)},${py(v)}`).join(" ");
                     return (
-                      <div style={{marginBottom:12,overflow:"hidden"}}>
+                      <div style={{marginBottom:12}}>
                         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginBottom:4,letterSpacing:".1em"}}>
                           ÚLTIMAS {vals.length} MEDICIONES — RANGO {plateauData.wMin}–{plateauData.wMax} kg (Δ{plateauData.wRange} kg)
                         </div>
-                        <svg viewBox={`0 0 ${W} ${H+10}`} style={{width:"100%",height:58,display:"block"}}>
-                          <polyline points={pts} fill="none" stroke={plateauData.color} strokeWidth="2" strokeLinejoin="round"/>
+                        <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H*1.8,display:"block"}}>
+                          {/* baseline */}
+                          <line x1={PAD_L} y1={PAD_T+plotH} x2={W-PAD_R} y2={PAD_T+plotH} stroke="#2a2a38" strokeWidth="0.5"/>
+                          {/* area fill */}
+                          <polyline
+                            points={[...vals.map((v,i)=>`${px(i)},${py(v)}`), `${px(vals.length-1)},${PAD_T+plotH}`, `${px(0)},${PAD_T+plotH}`].join(" ")}
+                            fill={`${plateauData.color}12`} stroke="none"/>
+                          {/* line */}
+                          <polyline points={pts} fill="none" stroke={plateauData.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+                          {/* dots + labels */}
                           {vals.map((v,i) => {
-                            const x = vals.length === 1 ? W/2 : (i / (vals.length-1)) * W;
-                            const y = H - ((v - minV) / range) * H;
+                            const x = px(i), y = py(v);
+                            const isTop = y < PAD_T + 10;
+                            const labelY = isTop ? y + 14 : y - 7;
                             return (<g key={i}>
-                              <circle cx={x} cy={y} r="3" fill={plateauData.color}/>
-                              <text x={x} y={y-6} textAnchor="middle" fontFamily="monospace" fontSize="8" fill="#8888a8">{v}</text>
+                              <circle cx={x} cy={y} r="4" fill={plateauData.color} stroke="#0c0c0f" strokeWidth="1.5"/>
+                              <text x={x} y={labelY} textAnchor="middle" fontFamily="monospace" fontSize="9" fill="#e8e8f0" fontWeight="600">{v}</text>
                             </g>);
                           })}
-                          <line x1="0" y1={H} x2={W} y2={H} stroke="#2a2a38" strokeWidth="0.5"/>
                         </svg>
                       </div>
                     );
