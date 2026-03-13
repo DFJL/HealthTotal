@@ -4974,22 +4974,53 @@ ${PLAN_MEALS.map(m=>`
               }
 
               // ── Build series ──
-              const bodyPts_w  = allInbody.filter(r=>r.w).map(r=>({x:toDays(r.d), y:r.w}));
-              const bodyPts_f  = allInbody.filter(r=>r.f).map(r=>({x:toDays(r.d), y:r.f}));
-              const bodyPts_m  = allInbody.filter(r=>r.m).map(r=>({x:toDays(r.d), y:r.m}));
-              const labPts_ldl = labResults.filter(r=>r.ldl).map(r=>({x:toDays(r.date), y:r.ldl}));
-              const labPts_hb  = labResults.filter(r=>r.hba1c).map(r=>({x:toDays(r.date), y:r.hba1c}));
-              const labPts_tg  = labResults.filter(r=>r.tg).map(r=>({x:toDays(r.date), y:r.tg}));
+              const bodyPts_w = allInbody.filter(r=>r.w).map(r=>({x:toDays(r.d), y:r.w}));
+              const bodyPts_f = allInbody.filter(r=>r.f).map(r=>({x:toDays(r.d), y:r.f}));
+              const bodyPts_m = allInbody.filter(r=>r.m).map(r=>({x:toDays(r.d), y:r.m}));
 
               const HORIZONS = [{label:"3M", days:90}, {label:"6M", days:180}, {label:"12M", days:365}];
 
+              // ── Lab field catalogue — covers all fields the app can store ──
+              const LAB_META = {
+                ldl:        { label:"LDL",             unit:"mg/dL", lbetter:true,  ref:100,   decimals:0 },
+                hdl:        { label:"HDL",             unit:"mg/dL", lbetter:false, ref:60,    decimals:0 },
+                tc:         { label:"Col. Total",      unit:"mg/dL", lbetter:true,  ref:200,   decimals:0 },
+                tg:         { label:"Triglicéridos",   unit:"mg/dL", lbetter:true,  ref:150,   decimals:0 },
+                hba1c:      { label:"HbA1c",           unit:"%",     lbetter:true,  ref:5.7,   decimals:2 },
+                glucose:    { label:"Glucosa",         unit:"mg/dL", lbetter:true,  ref:100,   decimals:0 },
+                insulin:    { label:"Insulina",        unit:"µU/mL", lbetter:true,  ref:10,    decimals:1 },
+                uric_acid:  { label:"Ácido Úrico",     unit:"mg/dL", lbetter:true,  ref:6.0,   decimals:1 },
+                creatinine: { label:"Creatinina",      unit:"mg/dL", lbetter:true,  ref:1.1,   decimals:2 },
+                ggt:        { label:"GGT",             unit:"U/L",   lbetter:true,  ref:50,    decimals:0 },
+                psa:        { label:"PSA",             unit:"ng/mL", lbetter:true,  ref:4.0,   decimals:2 },
+                hemoglobin: { label:"Hemoglobina",     unit:"g/dL",  lbetter:false, ref:14,    decimals:1 },
+                leucocitos: { label:"Leucocitos",      unit:"×10³",  lbetter:true,  ref:10,    decimals:1 },
+                vcm:        { label:"VCM",             unit:"fL",    lbetter:null,  ref:null,  decimals:1 },
+                hcm:        { label:"HCM",             unit:"pg",    lbetter:null,  ref:null,  decimals:1 },
+                urea:       { label:"Urea",            unit:"mg/dL", lbetter:true,  ref:45,    decimals:0 },
+              };
+
+              // ── Auto-discover lab fields with ≥2 data points ──
+              const labIndicators = Object.entries(LAB_META)
+                .map(([key, meta]) => {
+                  const pts = labResults
+                    .filter(r => r[key] != null && !isNaN(Number(r[key])))
+                    .map(r => ({ x: toDays(r.date), y: Number(r[key]) }))
+                    .sort((a,b) => a.x - b.x);
+                  if (pts.length < 2) return null;
+                  return {
+                    key, ...meta, pts,
+                    good: meta.lbetter===true  ? "↓ Mejorando" : meta.lbetter===false ? "↑ Mejorando" : "→ Estable",
+                    bad:  meta.lbetter===true  ? "↑ Empeorando": meta.lbetter===false ? "↓ Empeorando": "→ Variable",
+                  };
+                })
+                .filter(Boolean);
+
               const INDICATORS = [
-                { key:"peso",   label:"Peso",            unit:"kg",     pts:bodyPts_w,  lbetter:true,  ref:null,        decimals:1, good:"↓ Reduciendo", bad:"↑ Aumentando" },
-                { key:"grasa",  label:"% Grasa",         unit:"%",      pts:bodyPts_f,  lbetter:true,  ref:20,          decimals:1, good:"↓ Perdiendo",  bad:"↑ Acumulando" },
-                { key:"musculo",label:"Masa muscular",   unit:"kg",     pts:bodyPts_m,  lbetter:false, ref:null,        decimals:1, good:"↑ Ganando",    bad:"↓ Perdiendo" },
-                { key:"ldl",    label:"LDL",             unit:"mg/dL",  pts:labPts_ldl, lbetter:true,  ref:100,         decimals:0, good:"↓ Mejorando",  bad:"↑ Aumentando" },
-                { key:"hba1c",  label:"HbA1c",           unit:"%",      pts:labPts_hb,  lbetter:true,  ref:5.7,         decimals:2, good:"↓ Mejorando",  bad:"↑ Empeorando" },
-                { key:"tg",     label:"Triglicéridos",   unit:"mg/dL",  pts:labPts_tg,  lbetter:true,  ref:150,         decimals:0, good:"↓ Mejorando",  bad:"↑ Aumentando" },
+                { key:"peso",    label:"Peso",          unit:"kg", pts:bodyPts_w, lbetter:true,  ref:null, decimals:1, good:"↓ Reduciendo", bad:"↑ Aumentando" },
+                { key:"grasa",   label:"% Grasa",       unit:"%",  pts:bodyPts_f, lbetter:true,  ref:20,   decimals:1, good:"↓ Perdiendo",  bad:"↑ Acumulando" },
+                { key:"musculo", label:"Masa muscular", unit:"kg", pts:bodyPts_m, lbetter:false, ref:null, decimals:1, good:"↑ Ganando",    bad:"↓ Perdiendo" },
+                ...labIndicators,
               ].filter(ind => ind.pts.length >= 2);
 
               if (!INDICATORS.length) return null;
