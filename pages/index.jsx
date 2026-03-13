@@ -952,6 +952,8 @@ function AppInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selDate, setSelDate] = useState(todayStr());
   const [showAdd, setShowAdd] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const [addMode, setAddMode] = useState("ai");
   const [offQuery, setOffQuery] = useState("");
   const [offResults, setOffResults] = useState([]);
@@ -2638,6 +2640,8 @@ Analiza este día y responde SOLO JSON sin backticks:
                         >⭐</button>
                       );
                     })()}
+                    <button onClick={()=>{ setEditForm({...e}); setEditingEntry({dateKey:selDate,entry:e}); }}
+                      title="Editar" style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:13,padding:"4px 6px",opacity:.5}} onMouseEnter={ev=>ev.currentTarget.style.opacity=1} onMouseLeave={ev=>ev.currentTarget.style.opacity=.5}>✏️</button>
                     <button onClick={()=>{deleteFoodEntry(e.id).catch(()=>{}); saveLog({...log,[selDate]:dayLog.filter(x=>x.id!==e.id)},selDate);}}
                       style={{background:"none",border:"none",color:"#44445a",cursor:"pointer",fontSize:14,padding:"4px 6px"}}>🗑</button>
                   </div>
@@ -5514,6 +5518,95 @@ ${PLAN_MEALS.map(m=>`
           </div>
           );
         })()}
+
+      {/* ══ EDIT FOOD ENTRY MODAL ══ */}
+      {editingEntry && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:1001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setEditingEntry(null)}>
+          <div style={{background:"#1a1a22",border:"1px solid #2a2a38",borderRadius:6,padding:20,width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:"#e8e8f0"}}>EDITAR REGISTRO</div>
+              <button onClick={()=>setEditingEntry(null)} style={{background:"none",border:"none",color:"#8888a8",cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+
+            {/* Name */}
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>NOMBRE</div>
+            <input className="inp" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}
+              style={{marginBottom:12,fontSize:13,width:"100%"}}/>
+
+            {/* Meal + DayType */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>TIEMPO DE COMIDA</div>
+                <select className="inp" value={editForm.meal||""} onChange={e=>setEditForm(p=>({...p,meal:e.target.value}))} style={{fontSize:12,width:"100%"}}>
+                  {["Desayuno","Snack Mañana","Almuerzo","Post-Entreno","Cena","Snack Noche","Otro"].map(m=><option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>TIPO DE DÍA</div>
+                <select className="inp" value={editForm.dayType||""} onChange={e=>setEditForm(p=>({...p,dayType:e.target.value}))} style={{fontSize:12,width:"100%"}}>
+                  <option value="entreno">Entreno</option>
+                  <option value="descanso">Descanso</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Macros */}
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>MACROS</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+              {[["calories","Kcal","#ffb830"],["protein","Prot g","#4dc8ff"],["carbs","Carbs g","#a8ff3e"],["fats","Grasas g","#ff9940"]].map(([k,label,col])=>(
+                <div key={k}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:col,marginBottom:3}}>{label}</div>
+                  <input type="number" className="inp" value={editForm[k]||""} onChange={e=>setEditForm(p=>({...p,[k]:+e.target.value}))} style={{fontSize:12,width:"100%"}}/>
+                </div>
+              ))}
+            </div>
+
+            {/* Grade + Impacts */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>GRADO</div>
+                <select className="inp" value={editForm.grade||"B"} onChange={e=>setEditForm(p=>({...p,grade:e.target.value}))} style={{fontSize:12,width:"100%"}}>
+                  {["A","A-","B+","B","B-","C","D","F"].map(g=><option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>IMPACTO LDL</div>
+                <select className="inp" value={editForm.ldl_impact||"neutro"} onChange={e=>setEditForm(p=>({...p,ldl_impact:e.target.value}))} style={{fontSize:12,width:"100%"}}>
+                  {["positivo","neutro","negativo"].map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>IMPACTO HbA1c</div>
+                <select className="inp" value={editForm.hba1c_impact||"neutro"} onChange={e=>setEditForm(p=>({...p,hba1c_impact:e.target.value}))} style={{fontSize:12,width:"100%"}}>
+                  {["positivo","neutro","negativo"].map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Notes + Alerta */}
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>NOTAS / TIPS</div>
+            <input className="inp" value={editForm.notes||""} onChange={e=>setEditForm(p=>({...p,notes:e.target.value}))}
+              placeholder="Tip nutricional..." style={{marginBottom:8,fontSize:12,width:"100%"}}/>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>ALERTA</div>
+            <input className="inp" value={editForm.alerta||""} onChange={e=>setEditForm(p=>({...p,alerta:e.target.value}))}
+              placeholder="Alerta o advertencia..." style={{marginBottom:16,fontSize:12,width:"100%"}}/>
+
+            {/* Actions */}
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn" style={{flex:1,background:"rgba(168,255,62,.12)",color:"#a8ff3e",border:"1px solid rgba(168,255,62,.3)"}}
+                onClick={()=>{
+                  const {dateKey} = editingEntry;
+                  const updated = {...editingEntry.entry,...editForm};
+                  const newDay = (log[dateKey]||[]).map(x=>x.id===updated.id?updated:x);
+                  saveLog({...log,[dateKey]:newDay},dateKey);
+                  if(user) upsertFoodEntry(user.id,dateKey,updated).catch(console.error);
+                  setEditingEntry(null);
+                }}>✓ GUARDAR CAMBIOS</button>
+              <button className="btn-sm" onClick={()=>setEditingEntry(null)}>CANCELAR</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ RENPHO MODAL ══ */}
       {showRenphoModal && (
