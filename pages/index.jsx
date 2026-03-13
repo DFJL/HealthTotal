@@ -1011,6 +1011,7 @@ function AppInner() {
   const [weekInsights, setWeekInsights] = useState(null);
   const [weekInsightsLoading, setWeekInsightsLoading] = useState(false);
   const [weekInsightsTs, setWeekInsightsTs] = useState(null);
+  const [tick, setTick] = useState(0); // live clock for cache age display
   const [dayInsight, setDayInsight] = useState({});
   const [dayInsightLoading, setDayInsightLoading] = useState(false);
   // Body photos
@@ -1469,7 +1470,7 @@ function AppInner() {
   // ── AI Routine Generator ──
   const generateRoutine = async () => {
     if (!routineInput.trim()) return;
-    setRoutineLoading(true); setGeneratedRoutine(null);
+    setRoutineLoading(true); setGeneratedRoutine(null); setRoutineTs(null);
     try {
       // Build user profile from actual state
       const lastIB = allInbody[allInbody.length-1];
@@ -1520,7 +1521,7 @@ Máximo 5 días. Máximo 6 ejercicios por día. Notas de ejercicio máximo 10 pa
   // ── AI Hábitos Adaptativos ──
   const generateAiHabits = async () => {
     const allEntries = Object.entries(log).flatMap(([d,entries])=>entries.map(e=>({...e,date:d}))).slice(-20);
-    setAiHabitsLoading(true); setAiHabits(null);
+    setAiHabitsLoading(true); setAiHabits(null); setAiHabitsTs(null);
     try {
       const summary = allEntries.length > 0
         ? allEntries.map(e=>`${e.meal||""}: ${e.name} | Grade:${e.grade||"?"} LDL:${e.ldl_impact||"?"} HbA1c:${e.hba1c_impact||"?"}`).join("\n")
@@ -1550,7 +1551,7 @@ Máximo 5 hábitos. Descripción máximo 20 palabras cada una.`}]})
   const generateWeekInsights = async () => {
     const allEntries = Object.entries(log).flatMap(([d,entries])=>entries.map(e=>({...e,date:d}))).slice(-50);
     if (allEntries.length < 3) { setWeekInsights({text:"Necesitas al menos 3 comidas registradas para generar insights."}); return; }
-    setWeekInsightsLoading(true); setWeekInsights(null);
+    setWeekInsightsLoading(true); setWeekInsights(null); setWeekInsightsTs(null);
     try {
       const summary = allEntries.map(e=>`${e.date} ${e.meal||""}: ${e.name} (${e.calories}kcal P:${e.protein}g grade:${e.grade||"?"} LDL:${e.ldl_impact||"?"} HbA1c:${e.hba1c_impact||"?"})`).join("\n");
       const res = await fetch("/api/analyze",{
@@ -1902,12 +1903,23 @@ Analiza este día y responde SOLO JSON sin backticks:
 
 
 
+  // ── Live clock tick every 60s so "hace Xmin" stays fresh ──
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n+1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
   const fmtCacheAge = ts => {
+    void tick; // reactive: re-evaluates every 60s
     if (!ts) return null;
     const mins = Math.round((Date.now()-ts)/60000);
+    if (mins <= 1) return 'actualizado ahora';
     if (mins < 60) return `hace ${mins} min`;
-    const hrs = Math.round(mins/60);
-    return `hace ${hrs}h`;
+    const hrs = Math.floor(mins/60);
+    const remMin = mins % 60;
+    if (hrs < 24) return remMin > 0 ? `hace ${hrs}h ${remMin}m` : `hace ${hrs}h`;
+    const days = Math.floor(hrs/24);
+    return `hace ${days}d`;
   };
   const isCacheExpired = ts => !ts || (Date.now()-ts) > 24*60*60*1000;
 
