@@ -1906,10 +1906,10 @@ Analiza este día y responde SOLO JSON sin backticks:
 
   const latestLab = labResults[labResults.length-1];
   const MODULES = [
-    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","REGISTRO"],["semana","PROGRESO"],["analisis","ANÁLISIS"],["habitos","HÁBITOS"],["guia","GUÍA"]]},
-    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","MEDICIONES"],["labs","LABS"],["score","SCORE"],["proyecciones","PROYECCIONES"],["timeline","TIMELINE"]]},
+    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","HOY"],["semana","SEMANA"],["analisis","IA"],["habitos","HÁBITOS"],["guia","PLAN"]]},
+    {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","COMPOSICIÓN"],["labs","LABS"],["score","SCORE"],["proyecciones","FUTURO"],["timeline","HISTORIAL"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
-    {id:"config", icon:"⚙", label:"CONFIG",    tabs:[["config","CONFIG"]]},
+    {id:"config", icon:"⚙", label:"PERFIL",    tabs:[["config","PERFIL"]]},
   ];
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
 
