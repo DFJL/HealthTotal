@@ -1906,7 +1906,7 @@ Analiza este día y responde SOLO JSON sin backticks:
 
   const latestLab = labResults[labResults.length-1];
   const MODULES = [
-    {id:"nutri", icon:"🥗", label:"NUTRICIÓN", tabs:[["hoy","HOY"],["semana","SEMANA"],["analisis","IA"],["habitos","HÁBITOS"],["guia","PLAN"]]},
+    {id:"nutri", icon:"🥗", label:"NUTRI", tabs:[["hoy","HOY"],["semana","SEMANA"],["analisis","IA"],["habitos","HÁBITOS"],["guia","PLAN"]]},
     {id:"cuerpo", icon:"📊", label:"CUERPO",    tabs:[["cuerpo","COMPOSICIÓN"],["labs","LABS"],["score","SCORE"],["proyecciones","FUTURO"],["timeline","HISTORIAL"]]},
     {id:"entrena", icon:"⚡", label:"ENTRENA",  tabs:[["entrena","RUTINA"]]},
     {id:"config", icon:"⚙", label:"PERFIL",    tabs:[["config","PERFIL"]]},
@@ -3952,7 +3952,7 @@ ${generatedRoutine.notes?`<div class="footer"><strong>📝 Notas:</strong> ${gen
             )}
 
             {/* ── Perfil de Entrenamiento ── */}
-            <div className="sec-h">Perfil & Configuración</div>
+            <div className="sec-h">Perfil</div>
             <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.5,letterSpacing:".04em"}}>Tu equipo, suplementos y objetivos alimentan el generador de rutinas. Edítalos en CONFIG.</p>
             <div className="g2" style={{marginBottom:20}}>
               <div className="card" style={{borderTop:"2px solid #a8ff3e"}}>
@@ -4381,23 +4381,155 @@ ${PLAN_MEALS.map(m=>`
             </div>
             </>)}
 
-            {/* ── Próximos pasos clínicos ── */}
-            <div className="sec-h">Próximos Pasos Clínicos</div>
-            <div className="card">
-              {[
-                lastInbody?.vi>=10 && {icon:"🚶",text:`Grasa visceral ${lastInbody?.vi} (meta <10) — caminar 15–20 min post-almuerzo todos los días`},
-                lastInbody && lastInbody.m != null && lastInbody.m < (targets.muscleGoal||39) && {icon:"💪",text:`Masa muscular ${lastInbody?.m}kg — meta ${targets.muscleGoal||39}kg, priorizar proteína post-entreno`},
-                avgProtein14>0 && avgProtein14<targets.protein*0.85 && {icon:"🥩",text:`Déficit de proteína (promedio ${avgProtein14}g vs meta ${targets.protein}g) — agrega fuente proteica en cada comida`},
-                labResults.length>0 && labResults[labResults.length-1]?.hba1c>=5.7 && {icon:"🩺",text:`HbA1c ${labResults[labResults.length-1]?.hba1c}% — caminar 15 min post-almuerzo y reducir carbos simples`},
-                {icon:"📊",text:"Check InBody cada 6–8 semanas para medir progreso"},
-                labResults.length===0 && {icon:"🔬",text:"Agrega tus resultados de laboratorio en la sección LABS para recomendaciones personalizadas"},
-              ].filter(Boolean).map((item,i)=>(
-                <div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid rgba(42,42,56,.4)",alignItems:"flex-start"}}>
-                  <span style={{fontSize:18,flexShrink:0}}>{item.icon}</span>
-                  <span style={{fontSize:12,color:"#8888a8",lineHeight:1.5}}>{item.text}</span>
+            {/* ── Próximos pasos clínicos — data-driven ── */}
+            {(()=>{
+              const lastLab = labResults.length ? labResults[labResults.length-1] : null;
+              const prevLab = labResults.length>1 ? labResults[labResults.length-2] : null;
+              const prevIB  = allInbody.length>1  ? allInbody[allInbody.length-2]  : null;
+
+              // Days since last InBody
+              const daysSinceIB = lastInbody?.d
+                ? Math.round((Date.now()-new Date(lastInbody.d).getTime())/86400000) : null;
+              const daysSinceLab = lastLab?.date
+                ? Math.round((Date.now()-new Date(lastLab.date).getTime())/86400000) : null;
+
+              // Deltas vs previous
+              const viDelta  = (lastInbody?.vi!=null && prevIB?.vi!=null) ? +(lastInbody.vi-prevIB.vi).toFixed(1) : null;
+              const mDelta   = (lastInbody?.m!=null  && prevIB?.m!=null)  ? +(lastInbody.m-prevIB.m).toFixed(1)  : null;
+              const fDelta   = (lastInbody?.f!=null  && prevIB?.f!=null)  ? +(lastInbody.f-prevIB.f).toFixed(1)  : null;
+              const ldlDelta = (lastLab?.ldl!=null   && prevLab?.ldl!=null)? +(lastLab.ldl-prevLab.ldl).toFixed(0): null;
+              const hbaDelta = (lastLab?.hba1c!=null && prevLab?.hba1c!=null)? +(lastLab.hba1c-prevLab.hba1c).toFixed(2): null;
+
+              const muscleGoal = targets.muscleGoal||39;
+              const mGap  = lastInbody?.m!=null ? +(muscleGoal-lastInbody.m).toFixed(1) : null;
+              const tgHdl = (lastLab?.tg&&lastLab?.hdl) ? +(lastLab.tg/lastLab.hdl).toFixed(2) : null;
+
+              const steps = [
+                // ── CRÍTICO ──────────────────────────────────
+                lastLab?.hba1c>=6.5 && {
+                  prio:"CRÍTICO", icon:"🩸", col:"#ff4d4d",
+                  title:"HbA1c en rango diabético",
+                  detail:`${lastLab.hba1c}% ${hbaDelta!=null?(hbaDelta>0?`▲+${hbaDelta}%`:`▼${hbaDelta}%`):""} · Meta <5.7%`,
+                  accion:"Consulta con médico endocrinólogo. Eliminar azúcares simples y harinas refinadas de inmediato. Caminar 15 min mínimo tras cada comida.",
+                },
+                lastInbody?.vi>=12 && {
+                  prio:"CRÍTICO", icon:"🫀", col:"#ff4d4d",
+                  title:"Grasa visceral muy elevada",
+                  detail:`Nivel ${lastInbody.vi} ${viDelta!=null?(viDelta>0?`▲+${viDelta}`:viDelta<0?`▼${viDelta}`:"→ sin cambio"):""} · Meta <10`,
+                  accion:"Prioridad #1. Déficit calórico moderado (300–400 kcal/día) + cardio diario. Reducir carbohidratos refinados y alcohol.",
+                },
+                lastLab?.ldl>=160 && {
+                  prio:"CRÍTICO", icon:"💉", col:"#ff4d4d",
+                  title:"LDL muy elevado",
+                  detail:`${lastLab.ldl} mg/dL ${ldlDelta!=null?(ldlDelta>0?`▲+${ldlDelta}`:ldlDelta<0?`▼${ldlDelta}`:"→"):""} · Meta <100 mg/dL`,
+                  accion:"Eliminar grasas saturadas (lácteos enteros, carnes grasas, fritos). Aumentar fibra soluble (avena, legumbres). Consultar con cardiólogo si persiste.",
+                },
+
+                // ── IMPORTANTE ───────────────────────────────
+                lastLab?.hba1c>=5.7 && lastLab?.hba1c<6.5 && {
+                  prio:"IMPORTANTE", icon:"🍬", col:"#ffb830",
+                  title:"HbA1c en rango pre-diabético",
+                  detail:`${lastLab.hba1c}% ${hbaDelta!=null?(hbaDelta>0?`▲+${hbaDelta}% vs anterior — tendencia negativa`:`▼${hbaDelta}% vs anterior — mejorando`):""} · Meta <5.7%`,
+                  accion:"Caminar 15 min post-almuerzo y post-cena. Reducir carbos simples, priorizar fibra. Repetir lab en 3 meses.",
+                },
+                lastInbody?.vi>=10 && lastInbody?.vi<12 && {
+                  prio:"IMPORTANTE", icon:"🚶", col:"#ffb830",
+                  title:"Grasa visceral elevada",
+                  detail:`Nivel ${lastInbody.vi} ${viDelta!=null?(viDelta<0?`▼${viDelta} vs anterior — bajando ✓`:`▲+${viDelta} vs anterior`):""} · Meta <10`,
+                  accion:"Caminar 20 min post-almuerzo diario. Mantener déficit moderado en días de descanso.",
+                },
+                lastLab?.ldl>=130 && lastLab?.ldl<160 && {
+                  prio:"IMPORTANTE", icon:"🩸", col:"#ffb830",
+                  title:"LDL elevado — en seguimiento",
+                  detail:`${lastLab.ldl} mg/dL ${ldlDelta!=null?(ldlDelta<0?`▼${ldlDelta} vs anterior ✓`:`▲+${ldlDelta} vs anterior`):""} · Meta <100 mg/dL`,
+                  accion:"Reducir grasas saturadas. Aumentar omega-3 (salmón, sardina, nueces). Repetir perfil lipídico en 3 meses.",
+                },
+                mGap!==null && mGap>2 && {
+                  prio:"IMPORTANTE", icon:"💪", col:"#ffb830",
+                  title:"Déficit de masa muscular",
+                  detail:`${lastInbody.m}kg actual · Meta ${muscleGoal}kg · Faltan ${mGap}kg ${mDelta!=null?(mDelta>0?`(+${mDelta}kg vs anterior ✓)`:`(${mDelta}kg vs anterior)`):""}`,
+                  accion:`Consumir ${targets.protein}g proteína/día distribuida en 4–5 comidas. Priorizar post-entreno en los primeros 45 min. Mínimo 3 sesiones de resistencia/semana.`,
+                },
+                avgProtein14>0 && avgProtein14<targets.protein*0.85 && {
+                  prio:"IMPORTANTE", icon:"🥩", col:"#ffb830",
+                  title:"Ingesta de proteína por debajo de meta",
+                  detail:`Promedio últimas 2 semanas: ${avgProtein14}g/día · Meta: ${targets.protein}g/día · Déficit: ${targets.protein-avgProtein14}g`,
+                  accion:"Agregar fuente proteica en desayuno y snacks. Opciones: huevos, yogur griego, atún, pollo, proteína en polvo.",
+                },
+                tgHdl!==null && tgHdl>3.5 && {
+                  prio:"IMPORTANTE", icon:"📉", col:"#ffb830",
+                  title:"Ratio TG/HDL elevado — riesgo insulino-resistencia",
+                  detail:`TG/HDL = ${tgHdl} · TG ${lastLab.tg} mg/dL · HDL ${lastLab.hdl} mg/dL · Meta ratio <3.0`,
+                  accion:"Reducir azúcares y carbos refinados. Aumentar grasa saludable (aguacate, aceite oliva, nueces). Cardio moderado 4x/semana.",
+                },
+
+                // ── RECOMENDADO ──────────────────────────────
+                daysSinceIB!==null && daysSinceIB>56 && {
+                  prio:"RECOMENDADO", icon:"📊", col:"#3ddc84",
+                  title:"Próximo InBody vencido",
+                  detail:`Último hace ${daysSinceIB} días (${fmtD(lastInbody.d)}) · Recomendado cada 6–8 semanas`,
+                  accion:"Agenda tu próxima medición. Hazlo en ayunas, misma hora del día, para comparar bien.",
+                },
+                daysSinceLab!==null && daysSinceLab>120 && {
+                  prio:"RECOMENDADO", icon:"🔬", col:"#3ddc84",
+                  title:"Labs sin actualizar",
+                  detail:`Último panel: ${fmtD(lastLab.date)} (hace ${daysSinceLab} días)`,
+                  accion:"Solicitar panel metabólico completo: lipídico, HbA1c, glucosa, insulina, ácido úrico. Idealmente cada 3–4 meses.",
+                },
+                lastLab?.hdl!=null && lastLab.hdl<50 && {
+                  prio:"RECOMENDADO", icon:"🛡", col:"#3ddc84",
+                  title:"HDL bajo — colesterol protector",
+                  detail:`${lastLab.hdl} mg/dL · Meta >60 mg/dL`,
+                  accion:"Ejercicio aeróbico 150 min/semana es el mejor elevador de HDL. Agregar grasas monoinsaturadas (aceite oliva, aguacate).",
+                },
+                labResults.length===0 && {
+                  prio:"RECOMENDADO", icon:"🔬", col:"#3ddc84",
+                  title:"Sin resultados de laboratorio",
+                  detail:"Sin datos de labs para personalizar recomendaciones clínicas",
+                  accion:"Agrega tus resultados en el módulo CUERPO → LABS para obtener pasos clínicos basados en tus marcadores reales.",
+                },
+              ].filter(Boolean);
+
+              if (!steps.length) return (
+                <div className="card" style={{textAlign:"center",padding:"24px 0",color:"#44445a"}}>
+                  <div style={{fontSize:32,marginBottom:8}}>✅</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15}}>Todo en orden</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",marginTop:6}}>Todos tus marcadores están dentro de rango óptimo.</div>
                 </div>
-              ))}
-            </div>
+              );
+
+              const prioOrder = {CRÍTICO:0,IMPORTANTE:1,RECOMENDADO:2};
+              steps.sort((a,b)=>prioOrder[a.prio]-prioOrder[b.prio]);
+
+              return (
+                <>
+                  <div className="sec-h">Próximos Pasos Clínicos</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {steps.map((item,i)=>(
+                      <div key={i} style={{
+                        background:"#0f0f16",
+                        border:`1px solid ${item.col}22`,
+                        borderLeft:`3px solid ${item.col}`,
+                        borderRadius:"0 4px 4px 0",
+                        padding:"14px 16px",
+                      }}>
+                        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                          <span style={{fontSize:22,flexShrink:0,marginTop:1}}>{item.icon}</span>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,color:"#e8e8f0"}}>{item.title}</span>
+                              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",padding:"2px 6px",borderRadius:2,background:`${item.col}20`,color:item.col,letterSpacing:".1em"}}>{item.prio}</span>
+                            </div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:item.col,marginBottom:6}}>{item.detail}</div>
+                            <div style={{fontSize:11,color:"#8888a8",lineHeight:1.6}}>{item.accion}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
           );
         })()}
@@ -5392,7 +5524,7 @@ ${PLAN_MEALS.map(m=>`
 
           return (
             <div>
-              <div className="sec-h">Metabolic Timeline</div>
+              <div className="sec-h">Historial</div>
               <p style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#44445a",marginBottom:16,lineHeight:1.6,letterSpacing:".04em"}}>
                 Hitos cronológicos — Δ≥6% peso · Δ≥8% músculo · Δ≥4pp grasa (acumulado por fuente). Todos los labs.
               </p>
