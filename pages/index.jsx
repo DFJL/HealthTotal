@@ -2032,6 +2032,33 @@ Analiza este día y responde SOLO JSON sin backticks:
         const ms = calcMetabolicScore(labResults, allInbody, log, targets);
         if (!ms) return null;
         const scoreColor = ms.score >= 80 ? "#3ddc84" : ms.score >= 60 ? "#ffb830" : "#ff4d4d";
+        // ── Compute metAge for strip ──
+        const _lab  = labResults[labResults.length-1] || null;
+        const _body = allInbody[allInbody.length-1]   || null;
+        const REAL_AGE_S = userProfile.dob ? Math.floor((Date.now()-new Date(userProfile.dob).getTime())/(1000*60*60*24*365.25)) : 39;
+        const NORMS_S = {
+          ldl:    {ages:[25,32,42,52,62],vals:[98,115,125,128,126],lbetter:true,  w:2.5},
+          hba1c:  {ages:[25,32,42,52,62],vals:[5.2,5.3,5.45,5.65,5.85],lbetter:true, w:2.5},
+          fat_pct:{ages:[25,32,42,52,62],vals:[18,21,24,26,28],lbetter:true,  w:2},
+          tg:     {ages:[25,32,42,52,62],vals:[95,115,130,140,138],lbetter:true,  w:1},
+          hdl:    {ages:[25,32,42,52,62],vals:[50,49,49,50,52],lbetter:false, w:1},
+        };
+        function interpAgeS(norm, val) {
+          const {ages,vals,lbetter}=norm;
+          if(lbetter){if(val<=vals[0])return ages[0]-(vals[0]-val)*1.5;if(val>=vals[vals.length-1])return ages[ages.length-1]+(val-vals[vals.length-1])*1.5;}
+          else{if(val>=vals[0])return ages[0]-(val-vals[0])*1.5;if(val<=vals[vals.length-1])return ages[ages.length-1]+(vals[vals.length-1]-val)*1.5;}
+          for(let i=0;i<ages.length-1;i++){const a0=ages[i],a1=ages[i+1],v0=vals[i],v1=vals[i+1];const inR=lbetter?(val>=v0&&val<=v1):(val<=v0&&val>=v1);if(inR){const t=(val-v0)/(v1-v0);return a0+t*(a1-a0);}}
+          return REAL_AGE_S;
+        }
+        const _sitems=[];
+        if(_lab?.ldl)   _sitems.push({...NORMS_S.ldl,   val:_lab.ldl,   age:interpAgeS(NORMS_S.ldl,   _lab.ldl)});
+        if(_lab?.hba1c) _sitems.push({...NORMS_S.hba1c, val:_lab.hba1c, age:interpAgeS(NORMS_S.hba1c, _lab.hba1c)});
+        if(_body?.f)    _sitems.push({...NORMS_S.fat_pct,val:_body.f,    age:interpAgeS(NORMS_S.fat_pct,_body.f)});
+        if(_lab?.tg)    _sitems.push({...NORMS_S.tg,    val:_lab.tg,    age:interpAgeS(NORMS_S.tg,    _lab.tg)});
+        if(_lab?.hdl)   _sitems.push({...NORMS_S.hdl,   val:_lab.hdl,   age:interpAgeS(NORMS_S.hdl,   _lab.hdl)});
+        const metAgeS = _sitems.length ? Math.round(Math.max(18,Math.min(75,_sitems.reduce((s,x)=>s+x.age*x.w,0)/_sitems.reduce((s,x)=>s+x.w,0)))) : null;
+        const metAgeDelta = metAgeS !== null ? metAgeS - REAL_AGE_S : null;
+        const metAgeCol = metAgeDelta===null?"#44445a":metAgeDelta<=-3?"#3ddc84":metAgeDelta<=2?"#ffb830":"#ff4d4d";
         return (
           <div onClick={()=>setTab("score")} style={{
             display:"flex",alignItems:"center",gap:0,
@@ -2077,6 +2104,20 @@ Analiza este día y responde SOLO JSON sin backticks:
                 </div>
               </div>
             ))}
+            {metAgeS !== null && (
+              <div style={{
+                padding:"10px 16px",borderRight:"1px solid #1a1a22",flexShrink:0,
+                display:"flex",flexDirection:"column",gap:2,
+              }}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",whiteSpace:"nowrap"}}>EDAD METAB</div>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,color:metAgeCol,whiteSpace:"nowrap"}}>{metAgeS} años</span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:metAgeCol}}>
+                    {metAgeDelta<=-3?`▼${Math.abs(metAgeDelta)}`:metAgeDelta<=2?`→`:` ▲${metAgeDelta}`}
+                  </span>
+                </div>
+              </div>
+            )}
             <div style={{padding:"10px 14px",flexShrink:0,marginLeft:"auto"}}>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>VER DETALLE →</span>
             </div>
