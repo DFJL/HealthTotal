@@ -4707,6 +4707,142 @@ ${PLAN_MEALS.map(m=>`
               })}
             </div>
 
+            {/* ── Edad Metabólica ── */}
+            {(()=>{
+              const REAL_AGE = userProfile.dob
+                ? Math.floor((Date.now()-new Date(userProfile.dob).getTime())/(1000*60*60*24*365.25))
+                : 39;
+              // NHANES male reference norms — midpoints 25/32/42/52/62
+              const NORMS = {
+                ldl:    {ages:[25,32,42,52,62],vals:[98,115,125,128,126],lbetter:true,  label:"LDL",unit:"mg/dL", w:2.5},
+                hba1c:  {ages:[25,32,42,52,62],vals:[5.2,5.3,5.45,5.65,5.85],lbetter:true, label:"HbA1c",unit:"%", w:2.5},
+                fat_pct:{ages:[25,32,42,52,62],vals:[18,21,24,26,28],lbetter:true,  label:"% Grasa",unit:"%", w:2},
+                tg:     {ages:[25,32,42,52,62],vals:[95,115,130,140,138],lbetter:true,  label:"TG",unit:"mg/dL", w:1},
+                hdl:    {ages:[25,32,42,52,62],vals:[50,49,49,50,52],lbetter:false, label:"HDL",unit:"mg/dL", w:1},
+              };
+              function interpAge(norm, val) {
+                const {ages,vals,lbetter} = norm;
+                // extrapolate beyond bounds
+                if (lbetter) {
+                  if (val <= vals[0])  return ages[0] - (vals[0]-val)*1.5;
+                  if (val >= vals[vals.length-1]) return ages[ages.length-1] + (val-vals[vals.length-1])*1.5;
+                } else {
+                  if (val >= vals[0])  return ages[0] - (val-vals[0])*1.5;
+                  if (val <= vals[vals.length-1]) return ages[ages.length-1] + (vals[vals.length-1]-val)*1.5;
+                }
+                for (let i=0;i<ages.length-1;i++){
+                  const a0=ages[i],a1=ages[i+1],v0=vals[i],v1=vals[i+1];
+                  const inRange = lbetter ? (val>=v0&&val<=v1) : (val<=v0&&val>=v1);
+                  if (inRange) {
+                    const t=(val-v0)/(v1-v0);
+                    return a0+t*(a1-a0);
+                  }
+                }
+                return REAL_AGE;
+              }
+              const items=[];
+              if(lab?.ldl)     items.push({...NORMS.ldl,    val:lab.ldl,    age:interpAge(NORMS.ldl,    lab.ldl)});
+              if(lab?.hba1c)   items.push({...NORMS.hba1c,  val:lab.hba1c,  age:interpAge(NORMS.hba1c,  lab.hba1c)});
+              if(body?.f)      items.push({...NORMS.fat_pct, val:body.f,    age:interpAge(NORMS.fat_pct, body.f)});
+              if(lab?.tg)      items.push({...NORMS.tg,     val:lab.tg,     age:interpAge(NORMS.tg,     lab.tg)});
+              if(lab?.hdl)     items.push({...NORMS.hdl,    val:lab.hdl,    age:interpAge(NORMS.hdl,    lab.hdl)});
+              if(!items.length) return null;
+              const totalW = items.reduce((s,x)=>s+x.w,0);
+              const rawAge = items.reduce((s,x)=>s+x.age*x.w,0)/totalW;
+              const metAge = Math.round(Math.max(18,Math.min(75,rawAge)));
+              const delta  = metAge - REAL_AGE;
+              const deltaCol = delta<=-3?"#3ddc84":delta<=2?"#ffb830":"#ff4d4d";
+              const deltaLabel = delta<=-3?`${Math.abs(delta)} años más joven`:delta<=2?`Similar a tu edad`:` ${delta} años mayor`;
+              // Ruler SVG
+              const RULER_MIN=20, RULER_MAX=65;
+              const toX = v => Math.max(0,Math.min(100,((v-RULER_MIN)/(RULER_MAX-RULER_MIN))*100));
+              const realPct  = toX(REAL_AGE);
+              const metPct   = toX(metAge);
+              return (
+                <div style={{marginBottom:24}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:12}}>EDAD METABÓLICA</div>
+                  <div style={{background:"#0f0f16",border:`1px solid ${deltaCol}22`,borderLeft:`3px solid ${deltaCol}`,borderRadius:"0 4px 4px 0",padding:"20px 20px 16px"}}>
+
+                    {/* Header row */}
+                    <div style={{display:"flex",alignItems:"flex-end",gap:16,flexWrap:"wrap",marginBottom:16}}>
+                      <div>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:4,letterSpacing:".1em"}}>EDAD METABÓLICA</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:52,color:deltaCol,lineHeight:1}}>{metAge}</span>
+                          <span style={{fontFamily:"'Syne',sans-serif",fontWeight:400,fontSize:18,color:"#44445a"}}>años</span>
+                        </div>
+                      </div>
+                      <div style={{paddingBottom:6}}>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",marginBottom:4}}>EDAD REAL</div>
+                        <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:22,color:"#8888a8"}}>{REAL_AGE}</div>
+                      </div>
+                      <div style={{paddingBottom:8}}>
+                        <div style={{background:deltaCol+"18",border:`1px solid ${deltaCol}33`,borderRadius:3,padding:"6px 12px"}}>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:deltaCol,fontWeight:700}}>{delta<0?"▼":delta===0?"→":"▲"} {deltaLabel}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ruler */}
+                    <div style={{position:"relative",height:36,marginBottom:16}}>
+                      {/* Track */}
+                      <div style={{position:"absolute",top:14,left:0,right:0,height:4,background:"#1a1a22",borderRadius:2}}/>
+                      {/* Gradient fill between real and meta age */}
+                      <div style={{
+                        position:"absolute",top:14,
+                        left:`${Math.min(realPct,metPct)}%`,
+                        width:`${Math.abs(metPct-realPct)}%`,
+                        height:4,
+                        background:`linear-gradient(to right, ${delta<=0?"#3ddc84":"#ff4d4d"}, ${deltaCol})`,
+                        borderRadius:2,
+                      }}/>
+                      {/* Real age pin */}
+                      <div style={{position:"absolute",left:`${realPct}%`,transform:"translateX(-50%)",top:4}}>
+                        <div style={{width:2,height:12,background:"#8888a8",margin:"0 auto"}}/>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#8888a8",textAlign:"center",marginTop:1,whiteSpace:"nowrap"}}>{REAL_AGE} real</div>
+                      </div>
+                      {/* Metabolic age pin */}
+                      <div style={{position:"absolute",left:`${metPct}%`,transform:"translateX(-50%)",top:0}}>
+                        <div style={{width:12,height:12,borderRadius:"50%",background:deltaCol,border:"2px solid #0c0c0f",margin:"0 auto"}}/>
+                        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:deltaCol,textAlign:"center",marginTop:2,whiteSpace:"nowrap",fontWeight:700}}>{metAge} metab</div>
+                      </div>
+                      {/* Scale labels */}
+                      <div style={{position:"absolute",bottom:-2,left:0,fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>{RULER_MIN}</div>
+                      <div style={{position:"absolute",bottom:-2,left:"50%",transform:"translateX(-50%)",fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>42</div>
+                      <div style={{position:"absolute",bottom:-2,right:0,fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>{RULER_MAX}</div>
+                    </div>
+
+                    {/* Biomarker breakdown */}
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:8}}>APORTE POR BIOMARCADOR</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {items.map((it,i)=>{
+                        const age = Math.round(Math.max(18,Math.min(75,it.age)));
+                        const d   = age - REAL_AGE;
+                        const col = d<=-3?"#3ddc84":d<=2?"#ffb830":"#ff4d4d";
+                        const barPct = toX(age);
+                        return (
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8",width:54,flexShrink:0}}>{it.label}</div>
+                            <div style={{flex:1,height:3,background:"#1a1a22",borderRadius:2,position:"relative"}}>
+                              <div style={{position:"absolute",left:0,width:`${barPct}%`,height:3,background:col+"55",borderRadius:2}}/>
+                              {/* real age marker */}
+                              <div style={{position:"absolute",left:`${realPct}%`,width:1,height:3,background:"#44445a"}}/>
+                            </div>
+                            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:12,color:col,width:24,textAlign:"right",flexShrink:0}}>{age}</div>
+                            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",width:52,flexShrink:0}}>{it.val}{it.unit}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#2a2a38",marginTop:12}}>
+                      Basado en normas NHANES (población masculina). Promedio ponderado por relevancia cardiometabólica.
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Advanced metrics ── */}
             <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:10}}>MÉTRICAS AVANZADAS</div>
             <div className="g2" style={{gap:8,marginBottom:24}}>
