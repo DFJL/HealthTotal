@@ -4107,28 +4107,137 @@ ${PLAN_MEALS.map(m=>`
                 background:"transparent",color:"#8888a8",cursor:"pointer",flexShrink:0
               }}>🖨 IMPRIMIR PLAN</button>
             </div>
-            <p style={{fontSize:12,color:"#44445a",marginBottom:14,fontFamily:"'JetBrains Mono',monospace",letterSpacing:".06em"}}>
-              PLANTILLA BASE · USA LA IA EN HÁBITOS PARA UN PLAN PERSONALIZADO
-            </p>
-            {PLAN_MEALS.map(m=>(
-              <div key={m.name} className="card" style={{marginBottom:12,borderLeft:`3px solid ${m.highlight?"#a8ff3e":"#2a2a38"}`,borderRadius:"0 4px 4px 0"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18}}>{m.name}</div>
-                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#8888a8"}}>{m.time}</div>
+            {/* ── TIMELINE STORYLINE ── */}
+            {(()=>{
+              const mealColors = ["#ffb830","#4dc8ff","#a8ff3e","#ff9940","#c084fc"];
+              const totalKcal  = PLAN_MEALS.reduce((s,m)=>s+m.kcal,0);
+              const totalProt  = PLAN_MEALS.reduce((s,m)=>s+m.p,0);
+              const totalCarbs = PLAN_MEALS.reduce((s,m)=>s+m.c,0);
+              const totalFats  = PLAN_MEALS.reduce((s,m)=>s+m.f,0);
+              return (
+                <div style={{marginBottom:20}}>
+                  {/* Day summary bar */}
+                  <div style={{background:"#0f0f16",border:"1px solid #2a2a38",borderRadius:4,padding:"10px 14px",marginBottom:16,display:"flex",flexWrap:"wrap",gap:16,alignItems:"center"}}>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".1em",flexShrink:0}}>TOTAL DÍA</div>
+                    {[
+                      {l:"kcal",v:totalKcal,c:"#ffb830"},
+                      {l:"prot",v:totalProt+"g",c:"#4dc8ff"},
+                      {l:"carbs",v:totalCarbs+"g",c:"#a8ff3e"},
+                      {l:"grasas",v:totalFats+"g",c:"#ff9940"},
+                    ].map(x=>(
+                      <div key={x.l} style={{display:"flex",alignItems:"baseline",gap:3}}>
+                        <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:x.c,lineHeight:1}}>{x.v}</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{x.l}</span>
+                      </div>
+                    ))}
+                    {/* Kcal bar breakdown */}
+                    <div style={{flex:1,minWidth:120}}>
+                      <div style={{height:4,borderRadius:2,background:"#1a1a22",overflow:"hidden",display:"flex",gap:1}}>
+                        {PLAN_MEALS.map((m,i)=>(
+                          <div key={i} style={{flex:m.kcal,background:mealColors[i%mealColors.length],opacity:.7}}/>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",gap:6,marginTop:3,flexWrap:"wrap"}}>
+                        {PLAN_MEALS.map((m,i)=>(
+                          <span key={i} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:mealColors[i%mealColors.length]}}>
+                            ● {m.kcal}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"10px",color:"#8888a8",textAlign:"right"}}>
-                    <span style={{color:"#ffb830"}}>{m.kcal} kcal</span> · P:{m.p}g · C:{m.c}g · G:{m.f}g
+
+                  {/* TIMELINE */}
+                  <div style={{position:"relative",paddingLeft:52}}>
+                    {/* Vertical connector line */}
+                    <div style={{
+                      position:"absolute",left:19,top:12,bottom:12,
+                      width:2,background:"linear-gradient(to bottom,#ffb830,#4dc8ff,#a8ff3e,#ff9940,#c084fc)",
+                      borderRadius:1,opacity:.25,
+                    }}/>
+
+                    {PLAN_MEALS.map((m,i)=>{
+                      const col = mealColors[i%mealColors.length];
+                      const pct = Math.round(m.kcal/totalKcal*100);
+                      return (
+                        <div key={m.name} style={{marginBottom: i<PLAN_MEALS.length-1 ? 0 : 0, position:"relative"}}>
+                          {/* Node dot on line */}
+                          <div style={{
+                            position:"absolute",left:-33,top:16,
+                            width:14,height:14,borderRadius:"50%",
+                            background:col,
+                            boxShadow:`0 0 0 3px #0c0c0f, 0 0 0 4px ${col}55`,
+                            flexShrink:0,
+                          }}/>
+
+                          {/* Time badge above card */}
+                          <div style={{
+                            fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",
+                            color:col,letterSpacing:".1em",marginBottom:4,
+                            display:"flex",alignItems:"center",gap:6,
+                          }}>
+                            <span style={{fontWeight:700}}>{m.time}</span>
+                            {m.highlight && <span style={{background:col+"22",color:col,padding:"1px 6px",borderRadius:2,fontSize:"7px"}}>COMIDA PRINCIPAL</span>}
+                          </div>
+
+                          {/* Card */}
+                          <div style={{
+                            background:"#0f0f16",
+                            border:`1px solid ${col}33`,
+                            borderLeft:`3px solid ${col}`,
+                            borderRadius:"0 4px 4px 0",
+                            marginBottom:20,
+                            overflow:"hidden",
+                          }}>
+                            {/* Card header */}
+                            <div style={{
+                              padding:"10px 14px",
+                              borderBottom:`1px solid ${col}18`,
+                              background:`${col}06`,
+                              display:"flex",justifyContent:"space-between",alignItems:"center",
+                              flexWrap:"wrap",gap:8,
+                            }}>
+                              <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:"#e8e8f0"}}>{m.name}</div>
+                              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:col}}>{m.kcal}</span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>kcal</span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a"}}>
+                                  P:{m.p}g · C:{m.c}g · G:{m.f}g
+                                </span>
+                                <div style={{width:36,height:4,borderRadius:2,background:"#1a1a22",overflow:"hidden"}}>
+                                  <div style={{width:`${pct}%`,height:"100%",background:col,maxWidth:"100%"}}/>
+                                </div>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a"}}>{pct}%</span>
+                              </div>
+                            </div>
+
+                            {/* Items */}
+                            {m.items.map((it,j)=>(
+                              <div key={j} style={{
+                                padding:"9px 14px",
+                                borderBottom: j<m.items.length-1 ? "1px solid rgba(42,42,56,.3)" : "none",
+                                display:"flex",gap:10,alignItems:"flex-start",
+                              }}>
+                                <div style={{
+                                  width:5,height:5,borderRadius:"50%",
+                                  background:col,flexShrink:0,marginTop:5,opacity:.7,
+                                }}/>
+                                <div style={{flex:1}}>
+                                  <div style={{fontSize:12,fontWeight:500,color:"#e8e8f0",lineHeight:1.4}}>{it.n}</div>
+                                  <div style={{fontSize:11,color:"#3ddc84",marginTop:2,lineHeight:1.4,fontStyle:"italic"}}>
+                                    {it.why}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                {m.items.map(it=>(
-                  <div key={it.n} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid rgba(42,42,56,.4)",gap:10}}>
-                    <div style={{fontSize:13,fontWeight:500}}>{it.n}</div>
-                    <div style={{fontSize:11,color:"#3ddc84",textAlign:"right",flex:"0 0 50%",fontStyle:"italic"}}>✦ {it.why}</div>
-                  </div>
-                ))}
-              </div>
-            ))}
+              );
+            })()}
 
             {/* ── Suplementos ── */}
             <div className="sec-h">Suplementos — Timing Óptimo</div>
