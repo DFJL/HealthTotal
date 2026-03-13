@@ -4946,6 +4946,200 @@ ${PLAN_MEALS.map(m=>`
               })()}
             </div>
 
+            {/* ── Forecasting Predictivo ── */}
+            {(()=>{
+              // ── Linear regression helper ──
+              function linReg(points) {
+                // points: [{x: days_from_epoch, y: value}]
+                if (points.length < 2) return null;
+                const n = points.length;
+                const sumX  = points.reduce((s,p)=>s+p.x, 0);
+                const sumY  = points.reduce((s,p)=>s+p.y, 0);
+                const sumXY = points.reduce((s,p)=>s+p.x*p.y, 0);
+                const sumX2 = points.reduce((s,p)=>s+p.x*p.x, 0);
+                const denom = n*sumX2 - sumX*sumX;
+                if (!denom) return null;
+                const slope = (n*sumXY - sumX*sumY) / denom; // units per day
+                const intercept = (sumY - slope*sumX) / n;
+                return { slope, intercept };
+              }
+              function project(reg, daysAhead) {
+                if (!reg) return null;
+                const nowDays = Date.now() / 86400000;
+                return reg.intercept + reg.slope * (nowDays + daysAhead);
+              }
+              function toDays(dateStr) {
+                // accepts YYYY-MM or YYYY-MM-DD
+                return new Date(dateStr.length===7 ? dateStr+"-15" : dateStr).getTime() / 86400000;
+              }
+
+              // ── Build series ──
+              const bodyPts_w  = allInbody.filter(r=>r.w).map(r=>({x:toDays(r.d), y:r.w}));
+              const bodyPts_f  = allInbody.filter(r=>r.f).map(r=>({x:toDays(r.d), y:r.f}));
+              const bodyPts_m  = allInbody.filter(r=>r.m).map(r=>({x:toDays(r.d), y:r.m}));
+              const labPts_ldl = labResults.filter(r=>r.ldl).map(r=>({x:toDays(r.date), y:r.ldl}));
+              const labPts_hb  = labResults.filter(r=>r.hba1c).map(r=>({x:toDays(r.date), y:r.hba1c}));
+              const labPts_tg  = labResults.filter(r=>r.tg).map(r=>({x:toDays(r.date), y:r.tg}));
+
+              const HORIZONS = [{label:"3M", days:90}, {label:"6M", days:180}, {label:"12M", days:365}];
+
+              const INDICATORS = [
+                { key:"peso",   label:"Peso",            unit:"kg",     pts:bodyPts_w,  lbetter:true,  ref:null,        decimals:1, good:"↓ Reduciendo", bad:"↑ Aumentando" },
+                { key:"grasa",  label:"% Grasa",         unit:"%",      pts:bodyPts_f,  lbetter:true,  ref:20,          decimals:1, good:"↓ Perdiendo",  bad:"↑ Acumulando" },
+                { key:"musculo",label:"Masa muscular",   unit:"kg",     pts:bodyPts_m,  lbetter:false, ref:null,        decimals:1, good:"↑ Ganando",    bad:"↓ Perdiendo" },
+                { key:"ldl",    label:"LDL",             unit:"mg/dL",  pts:labPts_ldl, lbetter:true,  ref:100,         decimals:0, good:"↓ Mejorando",  bad:"↑ Aumentando" },
+                { key:"hba1c",  label:"HbA1c",           unit:"%",      pts:labPts_hb,  lbetter:true,  ref:5.7,         decimals:2, good:"↓ Mejorando",  bad:"↑ Empeorando" },
+                { key:"tg",     label:"Triglicéridos",   unit:"mg/dL",  pts:labPts_tg,  lbetter:true,  ref:150,         decimals:0, good:"↓ Mejorando",  bad:"↑ Aumentando" },
+              ].filter(ind => ind.pts.length >= 2);
+
+              if (!INDICATORS.length) return null;
+
+              return (
+                <div style={{marginBottom:24}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",letterSpacing:".2em",marginBottom:12}}>
+                    FORECASTING PREDICTIVO — SI MANTIENES ESTOS HÁBITOS
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {INDICATORS.map(ind=>{
+                      const reg = linReg(ind.pts);
+                      if (!reg) return null;
+                      const nowDays = Date.now()/86400000;
+                      const currentVal = reg.intercept + reg.slope*nowDays;
+                      const projections = HORIZONS.map(h=>({
+                        ...h,
+                        val: project(reg, h.days),
+                      }));
+                      // slope per month
+                      const slopePerMonth = reg.slope * 30;
+                      const improving = ind.lbetter ? slopePerMonth < -0.01 : slopePerMonth > 0.01;
+                      const worsening = ind.lbetter ? slopePerMonth > 0.01  : slopePerMonth < -0.01;
+                      const trendCol  = improving ? "#3ddc84" : worsening ? "#ff4d4d" : "#ffb830";
+                      const trendIcon = improving ? "↘" : worsening ? "↗" : "→";
+                      const trendText = improving ? ind.good : worsening ? ind.bad : "→ Estable";
+
+                      // Mini sparkline — last N real points + 12m projection
+                      const spark = ind.pts.slice(-6);
+                      const proj12 = project(reg, 365);
+                      const allY = [...spark.map(p=>p.y), proj12].filter(Boolean);
+                      const minY = Math.min(...allY)*0.97, maxY = Math.max(...allY)*1.03;
+                      const rangeY = maxY-minY || 1;
+                      const SW=200, SH=36, PAD=4;
+                      const plotW=SW-PAD*2, plotH=SH-PAD*2;
+                      // x range: first real point to +12m
+                      const xMin=spark[0].x, xMax=nowDays+365;
+                      const xRange=xMax-xMin||1;
+                      const toSX=x=>PAD+((x-xMin)/xRange)*plotW;
+                      const toSY=y=>PAD+plotH-((y-minY)/rangeY)*plotH;
+                      const realPts=spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`).join(" ");
+                      // trend line: from first real to 12m ahead
+                      const tx0=toSX(spark[0].x), ty0=toSY(reg.intercept+reg.slope*spark[0].x);
+                      const tx1=toSX(nowDays+365), ty1=toSY(proj12);
+                      // ref line
+                      const refY = ind.ref ? toSY(ind.ref) : null;
+
+                      return (
+                        <div key={ind.key} style={{
+                          background:"#0f0f16",
+                          border:`1px solid ${trendCol}22`,
+                          borderLeft:`3px solid ${trendCol}`,
+                          borderRadius:"0 4px 4px 0",
+                          padding:"14px 16px",
+                        }}>
+                          <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+
+                            {/* Left: label + trend */}
+                            <div style={{flex:"0 0 130px"}}>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginBottom:4}}>{ind.label}</div>
+                              <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:4}}>
+                                <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:22,color:trendCol,lineHeight:1}}>
+                                  {currentVal.toFixed(ind.decimals)}
+                                </span>
+                                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a"}}>{ind.unit}</span>
+                              </div>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:trendCol}}>
+                                {trendIcon} {trendText}
+                              </div>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginTop:2}}>
+                                {(slopePerMonth>0?"+":"")+slopePerMonth.toFixed(ind.decimals+1)}{ind.unit}/mes · {ind.pts.length} mediciones
+                              </div>
+                            </div>
+
+                            {/* Center: sparkline */}
+                            <div style={{flex:"0 0 200px"}}>
+                              <svg viewBox={`0 0 ${SW} ${SH}`} style={{width:"100%",maxWidth:200,height:SH*1.8,display:"block"}}>
+                                {/* Ref line */}
+                                {refY!==null && refY>=PAD && refY<=SH-PAD && (
+                                  <line x1={PAD} y1={refY} x2={SW-PAD} y2={refY}
+                                    stroke="#44445a" strokeWidth="0.5" strokeDasharray="2,2"/>
+                                )}
+                                {/* Trend line (full projection) */}
+                                <line x1={tx0} y1={ty0} x2={tx1} y2={ty1}
+                                  stroke={trendCol} strokeWidth="1" strokeDasharray="3,2" opacity="0.5"/>
+                                {/* Area under real line */}
+                                <polyline
+                                  points={[...spark.map(p=>`${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`),
+                                    `${toSX(spark[spark.length-1].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`,
+                                    `${toSX(spark[0].x).toFixed(1)},${(PAD+plotH).toFixed(1)}`].join(" ")}
+                                  fill={trendCol+"12"} stroke="none"/>
+                                {/* Real data line */}
+                                <polyline points={realPts} fill="none" stroke={trendCol} strokeWidth="2"
+                                  strokeLinejoin="round" strokeLinecap="round"/>
+                                {/* Dots */}
+                                {spark.map((p,i)=>(
+                                  <circle key={i} cx={toSX(p.x)} cy={toSY(p.y)} r="2.5"
+                                    fill={trendCol} stroke="#0c0c0f" strokeWidth="1"/>
+                                ))}
+                                {/* NOW vertical marker */}
+                                <line x1={toSX(nowDays)} y1={PAD} x2={toSX(nowDays)} y2={PAD+plotH}
+                                  stroke="#2a2a38" strokeWidth="1"/>
+                              </svg>
+                              <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:"#44445a",marginTop:1}}>
+                                <span>{spark[0] ? new Date(spark[0].x*86400000).toLocaleDateString("es",{month:"short",year:"2-digit"}) : ""}</span>
+                                <span style={{color:"#2a2a38"}}>hoy</span>
+                                <span>+12m</span>
+                              </div>
+                            </div>
+
+                            {/* Right: projections */}
+                            <div style={{flex:1,minWidth:120}}>
+                              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",letterSpacing:".1em",marginBottom:6}}>PROYECCIÓN</div>
+                              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                {projections.map(p=>{
+                                  const pVal = p.val;
+                                  const delta = pVal - currentVal;
+                                  const dCol = (ind.lbetter ? delta<0 : delta>0) ? "#3ddc84" : Math.abs(delta)<0.5 ? "#ffb830" : "#ff4d4d";
+                                  const atRef = ind.ref && (ind.lbetter ? pVal<=ind.ref : pVal>=ind.ref);
+                                  return (
+                                    <div key={p.label} style={{
+                                      background:atRef?dCol+"18":"#131318",
+                                      border:`1px solid ${dCol}33`,
+                                      borderRadius:3,padding:"6px 10px",textAlign:"center",
+                                    }}>
+                                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#44445a",marginBottom:2}}>{p.label}</div>
+                                      <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:dCol}}>
+                                        {pVal.toFixed(ind.decimals)}
+                                      </div>
+                                      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:dCol,marginTop:1}}>
+                                        {(delta>0?"+":"")+delta.toFixed(ind.decimals)}
+                                      </div>
+                                      {atRef && <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"6px",color:dCol,marginTop:2}}>✓ META</div>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"7px",color:"#2a2a38",marginTop:8}}>
+                    Proyección lineal basada en tendencia histórica. Asume continuidad de hábitos actuales.
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Wearables coming soon ── */}
             <div style={{background:"rgba(168,255,62,.03)",border:"1px dashed rgba(168,255,62,.15)",borderRadius:4,padding:"16px",marginBottom:24}}>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#a8ff3e",letterSpacing:".2em",marginBottom:6}}>PRÓXIMAMENTE — WEARABLES</div>
