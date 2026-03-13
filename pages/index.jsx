@@ -980,7 +980,7 @@ function AppInner() {
   const [inbodyResult, setInbodyResult]   = useState(null);
   const [inbodyB64, setInbodyB64] = useState(null);
   const [showManualInbody, setShowManualInbody] = useState(false);
-  const [manualInbody, setManualInbody] = useState({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
+  const [manualInbody, setManualInbody] = useState({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",systolic:"",diastolic:"",hr:"",otro_label:"",otro_valor:"",otro_unidad:"",note:""});
   const [customInbody, setCustomInbody] = useState([]);
   const [inbodySourceFilter, setInbodySourceFilter] = useState('all'); // 'all' | 'inbody' | 'renpho' | 'manual'
   const [briSource, setBriSource] = useState('all'); // source filter local to BRI card
@@ -994,7 +994,7 @@ function AppInner() {
   const [labsResult, setLabsResult]   = useState(null);
   const [labsB64, setLabsB64] = useState(null);
   const [showManualLabs, setShowManualLabs] = useState(false);
-  const [manualLabs, setManualLabs] = useState({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:""});
+  const [manualLabs, setManualLabs] = useState({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:"",otro_label:"",otro_valor:"",otro_unidad:""});
   const [customLabs, setCustomLabs] = useState([]);
   const [userProfile, setUserProfile] = useState(USER_PROFILE_DEFAULT);
   // AI Routine generator
@@ -1408,14 +1408,17 @@ function AppInner() {
   };
 
   const saveManualInbody = () => {
-    const {date,weight,muscle,fat_pct,visceral,waist,inbody_score,note} = manualInbody;
+    const {date,weight,muscle,fat_pct,visceral,waist,inbody_score,systolic,diastolic,hr,otro_label,otro_valor,otro_unidad,note} = manualInbody;
     if (!date || !weight) { alert("Fecha y Peso son obligatorios"); return; }
     const wNum = parseFloat(weight), mNum = parseFloat(muscle)||null, fNum = parseFloat(fat_pct)||null;
     const viNum = parseFloat(visceral)||null, cNum = parseFloat(waist)||null, sNum = parseFloat(inbody_score)||null;
-    const whrCalc = (cNum && wNum) ? parseFloat((cNum / 170).toFixed(2)) : null; // approx height
-    const entry = { d:date, w:wNum, m:mNum, f:fNum, vi:viNum, s:sNum, whr:whrCalc, waist:cNum, note:note||"Manual ◀", source:"manual" };
+    const whrCalc = (cNum && wNum) ? parseFloat((cNum / 170).toFixed(2)) : null;
+    const sysNum = parseFloat(systolic)||null, diaNum = parseFloat(diastolic)||null, hrNum = parseFloat(hr)||null;
+    const otroEntry = (otro_label && otro_valor) ? {label:otro_label, valor:parseFloat(otro_valor)||otro_valor, unidad:otro_unidad||""} : null;
+    const entry = { d:date, w:wNum, m:mNum, f:fNum, vi:viNum, s:sNum, whr:whrCalc, waist:cNum,
+      systolic:sysNum, diastolic:diaNum, hr:hrNum, otro:otroEntry, note:note||"Manual ◀", source:"manual" };
     saveCustomInbody([...customInbody, entry], entry);
-    setManualInbody({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",note:""});
+    setManualInbody({date:"",weight:"",muscle:"",fat_pct:"",visceral:"",waist:"",inbody_score:"",systolic:"",diastolic:"",hr:"",otro_label:"",otro_valor:"",otro_unidad:"",note:""});
     setShowManualInbody(false);
     alert("✓ Medición manual guardada en historial");
   };
@@ -1431,12 +1434,13 @@ function AppInner() {
       psa:toNum(rest.psa), creatinina:toNum(rest.creatinina), ggt:toNum(rest.ggt),
       acido_urico:toNum(rest.acido_urico), vcm:toNum(rest.vcm), hcm:toNum(rest.hcm),
       hb:toNum(rest.hb), leucocitos:toNum(rest.leucocitos),
+      otro: (rest.otro_label && rest.otro_valor) ? {label:rest.otro_label, valor:parseFloat(rest.otro_valor)||rest.otro_valor, unidad:rest.otro_unidad||""} : null,
       summary:"Ingreso manual"
     };
     try {
       await insertLabResult(user.id, entry);
       setLabResults(prev=>[...prev,entry].sort((a,b)=>a.date.localeCompare(b.date)));
-      setManualLabs({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:""});
+      setManualLabs({date:"",ldl:"",hdl:"",tc:"",tg:"",hba1c:"",glucose:"",insulin:"",psa:"",creatinina:"",ggt:"",acido_urico:"",vcm:"",hcm:"",hb:"",leucocitos:"",otro_label:"",otro_valor:"",otro_unidad:""});
       setShowManualLabs(false);
       alert("✓ Resultado de laboratorio guardado");
     } catch(e) { alert("Error al guardar: "+e.message); }
@@ -3018,7 +3022,7 @@ Analiza este día y responde SOLO JSON sin backticks:
                   <div className="lbl" style={{marginBottom:10}}>📝 ENTRADA MANUAL — PESO / INBODY</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                     {[
-                      ["date","Fecha (YYYY-MM'DD o YYYY-MM)","text",true],
+                      ["date","Fecha (YYYY-MM-DD o YYYY-MM)","text",true],
                       ["weight","Peso (kg)","number",true],
                       ["muscle","Masa muscular (kg)","number",false],
                       ["fat_pct","% Grasa","number",false],
@@ -3030,6 +3034,26 @@ Analiza este día y responde SOLO JSON sin backticks:
                         value={manualInbody[k]} onChange={e=>setManualInbody(p=>({...p,[k]:e.target.value}))}
                         className="inp" style={{fontSize:11}}/>
                     ))}
+                    {/* Vitales */}
+                    <div style={{gridColumn:"1/-1",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginTop:6,marginBottom:2}}>
+                      VITALES (opcional)
+                    </div>
+                    <input type="number" placeholder="Presión sistólica (mmHg)" value={manualInbody.systolic}
+                      onChange={e=>setManualInbody(p=>({...p,systolic:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    <input type="number" placeholder="Presión diastólica (mmHg)" value={manualInbody.diastolic}
+                      onChange={e=>setManualInbody(p=>({...p,diastolic:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    <input type="number" placeholder="Frecuencia cardíaca (bpm)" value={manualInbody.hr}
+                      onChange={e=>setManualInbody(p=>({...p,hr:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    {/* Otro */}
+                    <div style={{gridColumn:"1/-1",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginTop:6,marginBottom:2}}>
+                      OTRO INDICADOR (opcional)
+                    </div>
+                    <input placeholder="Nombre (ej: Temperatura, SpO2...)" value={manualInbody.otro_label}
+                      onChange={e=>setManualInbody(p=>({...p,otro_label:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    <input type="number" placeholder="Valor" value={manualInbody.otro_valor}
+                      onChange={e=>setManualInbody(p=>({...p,otro_valor:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    <input placeholder="Unidad (ej: °C, %, mg/dL)" value={manualInbody.otro_unidad}
+                      onChange={e=>setManualInbody(p=>({...p,otro_unidad:e.target.value}))} className="inp" style={{fontSize:11}}/>
                     <input placeholder="Nota (ej: Báscula casa, gym...)" value={manualInbody.note}
                       onChange={e=>setManualInbody(p=>({...p,note:e.target.value}))}
                       className="inp" style={{fontSize:11,gridColumn:"1/-1"}}/>
@@ -3398,7 +3422,7 @@ Analiza este día y responde SOLO JSON sin backticks:
               </div>
               <div className="card tbl-wrap" style={{marginBottom:20}}>
                 <table className="tbl">
-                  <thead><tr><th>Fecha</th><th>Fuente</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th className="hide-xs">WHR</th><th className="hide-xs">Score</th><th>Nota</th></tr></thead>
+                  <thead><tr><th>Fecha</th><th>Fuente</th><th>Peso</th><th>Músculo</th><th>% Grasa</th><th>Visceral</th><th className="hide-xs">WHR</th><th className="hide-xs">Score</th><th className="hide-xs">Presión</th><th className="hide-xs">FC</th><th className="hide-xs">Otro</th><th>Nota</th></tr></thead>
                   <tbody>
                     {showing.map(r=>{
                       const src = r.source||"inbody";
@@ -3414,6 +3438,13 @@ Analiza este día y responde SOLO JSON sin backticks:
                         <td className="mono" style={{color:!r.vi?"#44445a":r.vi<=5?"#3ddc84":"#ffb830"}}>{r.vi??"—"}</td>
                         <td className="mono hide-xs" style={{color:!r.whr?"#44445a":r.whr<=0.90?"#3ddc84":"#ffb830"}}>{r.whr??"—"}</td>
                         <td className="mono hide-xs" style={{color:!r.s?"#44445a":r.s>=85?"#3ddc84":r.s>=80?"#4dc8ff":"#44445a"}}>{r.s??"—"}</td>
+                        <td className="mono hide-xs" style={{color:r.systolic?"#ff9940":"#44445a",whiteSpace:"nowrap"}}>
+                          {r.systolic&&r.diastolic?`${r.systolic}/${r.diastolic}`:r.systolic?`${r.systolic}/—`:"—"}
+                        </td>
+                        <td className="mono hide-xs" style={{color:r.hr?"#c084fc":"#44445a"}}>{r.hr?`${r.hr} bpm`:"—"}</td>
+                        <td className="hide-xs" style={{fontSize:10,color:"#8888a8",whiteSpace:"nowrap"}}>
+                          {r.otro?`${r.otro.label}: ${r.otro.valor}${r.otro.unidad?" "+r.otro.unidad:""}`:"—"}
+                        </td>
                         <td style={{fontSize:10,color:"#8888a8"}}>{r.note}</td>
                       </tr>
                       );
@@ -3481,6 +3512,16 @@ Analiza este día y responde SOLO JSON sin backticks:
                         value={manualLabs[k]} onChange={e=>setManualLabs(p=>({...p,[k]:e.target.value}))}
                         className="inp" style={{fontSize:11}}/>
                     ))}
+                    {/* Otro lab */}
+                    <div style={{gridColumn:"1/-1",fontFamily:"'JetBrains Mono',monospace",fontSize:"8px",color:"#44445a",letterSpacing:".1em",marginTop:6,marginBottom:2}}>
+                      OTRO INDICADOR (opcional)
+                    </div>
+                    <input placeholder="Nombre (ej: Vitamina D, Ferritina, TSH...)" value={manualLabs.otro_label}
+                      onChange={e=>setManualLabs(p=>({...p,otro_label:e.target.value}))} className="inp" style={{fontSize:11,gridColumn:"1/-1"}}/>
+                    <input type="number" step="0.01" placeholder="Valor" value={manualLabs.otro_valor}
+                      onChange={e=>setManualLabs(p=>({...p,otro_valor:e.target.value}))} className="inp" style={{fontSize:11}}/>
+                    <input placeholder="Unidad (ej: ng/mL, pg/mL, mIU/L)" value={manualLabs.otro_unidad}
+                      onChange={e=>setManualLabs(p=>({...p,otro_unidad:e.target.value}))} className="inp" style={{fontSize:11}}/>
                   </div>
                   <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:"9px",color:"#44445a",marginBottom:8}}>
                     * Solo ingresa los valores que tengas disponibles. Fecha obligatoria.
@@ -3654,7 +3695,7 @@ Analiza este día y responde SOLO JSON sin backticks:
             })() : null}
 
             {/* Otros Parámetros — dynamic from labResults */}
-            {labResults.some(l=>l.psa!=null||l.creatinina!=null||l.ggt!=null||l.acido_urico!=null) && (
+            {labResults.some(l=>l.psa!=null||l.creatinina!=null||l.ggt!=null||l.acido_urico!=null||l.otro!=null) && (
               <>
               <div className="sec-h">Otros Parámetros</div>
               <div className="g4" style={{marginBottom:20}}>
@@ -3669,6 +3710,17 @@ Analiza este día y responde SOLO JSON sin backticks:
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:36,color:x.c,lineHeight:1}}>{x.v}<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#8888a8",marginLeft:2}}>{x.u}</span></div>
                     <div style={{marginTop:8}}><span style={{background:x.c==="#3ddc84"?"rgba(61,220,132,.1)":"rgba(255,77,77,.1)",color:x.c,borderRadius:2,padding:"2px 8px",fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{x.c==="#3ddc84"?"NORMAL ✓":"REVISAR ⚠"}</span></div>
                     <div style={{fontSize:11,color:"#8888a8",marginTop:6}}>{x.ref}</div>
+                  </div>
+                ))}
+                {/* Custom "otro" lab fields */}
+                {labResults.filter(l=>l.otro).map((l,i)=>(
+                  <div key={i} className="card" style={{borderTop:"2px solid #8888a8"}}>
+                    <div className="lbl" style={{color:"#8888a8"}}>{l.otro.label} · {l.date}</div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:36,color:"#e8e8f0",lineHeight:1}}>
+                      {l.otro.valor}
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:"#8888a8",marginLeft:2}}>{l.otro.unidad}</span>
+                    </div>
+                    <div style={{fontSize:11,color:"#44445a",marginTop:6}}>Indicador personalizado</div>
                   </div>
                 ))}
               </div>
