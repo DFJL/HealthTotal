@@ -1203,6 +1203,12 @@ function AppInner() {
     analyzeDayInsight(selDate, entries);
   }, [selDate, tab, loaded]);
 
+  // ── Live clock tick every 60s so "hace Xmin" stays fresh ──
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n+1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
   if (authLoading) return null;
 
   // ── ONBOARDING OVERLAY ──
@@ -1902,12 +1908,6 @@ Analiza este día y responde SOLO JSON sin backticks:
   const activeModule = MODULES.find(m=>m.tabs.some(([k])=>k===tab)) || MODULES[0];
 
 
-
-  // ── Live clock tick every 60s so "hace Xmin" stays fresh ──
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n+1), 60000);
-    return () => clearInterval(t);
-  }, []);
 
   const fmtCacheAge = ts => {
     void tick; // reactive: re-evaluates every 60s
